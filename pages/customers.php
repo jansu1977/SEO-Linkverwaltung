@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'edit' && $customerId) {
         $customers = loadData('customers.json');
-        if (isset($customers[$customerId]) && $customers[$customerId]['user_id'] === $userId) {
+        if (isset($customers[$customerId]) && ($isAdmin || $customers[$customerId]['user_id'] === $userId)) {
             $name = sanitizeString($_POST['name'] ?? '');
             $email = sanitizeString($_POST['email'] ?? '');
             $phone = sanitizeString($_POST['phone'] ?? '');
@@ -174,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'delete' && $customerId) {
         $customers = loadData('customers.json');
-        if (isset($customers[$customerId]) && $customers[$customerId]['user_id'] === $userId) {
+        if (isset($customers[$customerId]) && ($isAdmin || $customers[$customerId]['user_id'] === $userId)) {
             unset($customers[$customerId]);
             if (saveData('customers.json', $customers)) {
                 redirectWithMessage('?page=customers', 'Kunde erfolgreich gelöscht.');
@@ -272,10 +272,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $customers = loadData('customers.json');
 $links = loadData('links.json');
 
-// Benutzer-spezifische Kunden
-$userCustomers = array_filter($customers, function($customer) use ($userId) {
-    return getArrayValue($customer, 'user_id') === $userId;
-});
+// Admin-Logik: Admin sieht alle Kunden, normale Benutzer nur ihre eigenen
+$users = loadData('users.json');
+$currentUser = $users[$userId] ?? null;
+$isAdmin = $currentUser && ($currentUser['role'] === 'admin');
+
+if ($isAdmin) {
+    // Admin sieht alle Kunden
+    $userCustomers = $customers;
+} else {
+    // Benutzer-spezifische Kunden
+    $userCustomers = array_filter($customers, function($customer) use ($userId) {
+        return getArrayValue($customer, 'user_id') === $userId;
+    });
+}
 
 // Statistiken berechnen
 $activeCustomers = array_filter($userCustomers, function($customer) {
@@ -296,8 +306,19 @@ foreach ($userCustomers as $customer) {
 if ($action === 'index'): ?>
     <div class="page-header">
         <div>
-            <h1 class="page-title">Kundenverwaltung</h1>
-            <p class="page-subtitle">Verwalten Sie Ihre Kunden und Kontakte</p>
+            <h1 class="page-title">
+                Kundenverwaltung
+                <?php if ($isAdmin): ?>
+                    <span class="badge badge-info" style="font-size: 12px; margin-left: 8px;">Admin-Ansicht</span>
+                <?php endif; ?>
+            </h1>
+            <p class="page-subtitle">
+                <?php if ($isAdmin): ?>
+                    Verwalten Sie alle Kunden im System
+                <?php else: ?>
+                    Verwalten Sie Ihre Kunden und Kontakte
+                <?php endif; ?>
+            </p>
         </div>
         <div class="action-buttons">
             <a href="?page=customers&action=create" class="btn btn-primary">
@@ -320,7 +341,13 @@ if ($action === 'index'): ?>
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Kunden-Übersicht</h3>
-                <p class="card-subtitle">Schneller Überblick über Ihre Kunden</p>
+                <p class="card-subtitle">
+                    <?php if ($isAdmin): ?>
+                        Schneller Überblick über alle Kunden im System
+                    <?php else: ?>
+                        Schneller Überblick über Ihre Kunden
+                    <?php endif; ?>
+                </p>
             </div>
             <div class="card-body">
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
@@ -451,6 +478,9 @@ if ($action === 'index'): ?>
                                 <th>Land</th>
                                 <th>Status</th>
                                 <th>Links</th>
+                                <?php if ($isAdmin): ?>
+                                    <th>Erstellt von</th>
+                                <?php endif; ?>
                                 <th>Erstellt</th>
                                 <th style="width: 120px;">Aktionen</th>
                             </tr>
@@ -462,6 +492,13 @@ if ($action === 'index'): ?>
                                     return getArrayValue($link, 'customer_id') === $customerId;
                                 });
                                 $linkCount = count($customerLinks);
+                                
+                                // Kunden-Besitzer Info (nur für Admin)
+                                if ($isAdmin) {
+                                    $customerOwner = $users[getArrayValue($customer, 'user_id', '')] ?? null;
+                                    $customerOwnerName = $customerOwner ? ($customerOwner['name'] ?? $customerOwner['username'] ?? 'Unbekannt') : 'Unbekannt';
+                                    $isOwnCustomer = getArrayValue($customer, 'user_id') === $userId;
+                                }
                             ?>
                                 <tr class="customer-row" 
                                     data-name="<?= strtolower($customer['name']) ?>" 
@@ -527,6 +564,21 @@ if ($action === 'index'): ?>
                                             0 Links
                                         <?php endif; ?>
                                     </td>
+                                    <?php if ($isAdmin): ?>
+                                        <td style="font-size: 12px; color: #8b8fa3;">
+                                            <?php if ($isOwnCustomer): ?>
+                                                <span style="color: #10b981;">
+                                                    <i class="fas fa-crown" style="margin-right: 4px;"></i>
+                                                    Sie
+                                                </span>
+                                            <?php else: ?>
+                                                <span style="color: #fbbf24;">
+                                                    <i class="fas fa-user" style="margin-right: 4px;"></i>
+                                                    <?= e($customerOwnerName) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                    <?php endif; ?>
                                     <td style="color: #8b8fa3; font-size: 12px;">
                                         <?= formatDate($customer['created_at']) ?>
                                     </td>
@@ -535,12 +587,14 @@ if ($action === 'index'): ?>
                                             <a href="?page=customers&action=view&id=<?= $customerId ?>" class="btn btn-sm btn-primary" title="Anzeigen">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="?page=customers&action=edit&id=<?= $customerId ?>" class="btn btn-sm btn-secondary" title="Bearbeiten">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <a href="?page=customers&action=delete&id=<?= $customerId ?>" class="btn btn-sm btn-danger" title="Löschen" onclick="return confirm('Kunde wirklich löschen?')">
-                                                <i class="fas fa-trash"></i>
-                                            </a>
+                                            <?php if ($isAdmin || getArrayValue($customer, 'user_id') === $userId): ?>
+                                                <a href="?page=customers&action=edit&id=<?= $customerId ?>" class="btn btn-sm btn-secondary" title="Bearbeiten">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="?page=customers&action=delete&id=<?= $customerId ?>" class="btn btn-sm btn-danger" title="Löschen" onclick="return confirm('Kunde wirklich löschen?')">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
@@ -554,7 +608,7 @@ if ($action === 'index'): ?>
 
 <?php elseif ($action === 'view' && $customerId): 
     $customer = $customers[$customerId] ?? null;
-    if (!$customer || getArrayValue($customer, 'user_id') !== $userId) {
+    if (!$customer || (!$isAdmin && getArrayValue($customer, 'user_id') !== $userId)) {
         echo '<div class="error-page"><div class="error-content" style="text-align: center; padding: 60px 20px;">';
         echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f56565; margin-bottom: 16px;"></i>';
         echo '<h1 style="margin-bottom: 16px;">Kunde nicht gefunden</h1>';
@@ -994,7 +1048,7 @@ if ($action === 'index'): ?>
     $customer = null;
     if ($action === 'edit') {
         $customer = $customers[$customerId] ?? null;
-        if (!$customer || getArrayValue($customer, 'user_id') !== $userId) {
+        if (!$customer || (!$isAdmin && getArrayValue($customer, 'user_id') !== $userId)) {
             echo '<div class="error-page"><div class="error-content" style="text-align: center; padding: 60px 20px;">';
             echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f56565; margin-bottom: 16px;"></i>';
             echo '<h1 style="margin-bottom: 16px;">Kunde nicht gefunden</h1>';
@@ -1650,11 +1704,11 @@ function filterCustomers() {
         noResultsRow.remove();
     }
     
-    if (visibleRows.length === 0) {
+            if (visibleRows.length === 0) {
         const noResultsRow = document.createElement('tr');
         noResultsRow.className = 'no-results-row';
         noResultsRow.innerHTML = `
-            <td colspan="9" style="text-align: center; padding: 40px; color: #8b8fa3;">
+            <td colspan="${document.querySelector('.table thead tr').children.length}" style="text-align: center; padding: 40px; color: #8b8fa3;">
                 <i class="fas fa-search" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
                 Keine Kunden gefunden, die den Filterkriterien entsprechen.
             </td>
