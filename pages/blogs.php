@@ -473,10 +473,6 @@ if ($action === 'index'): ?>
                     <?php endif; ?>
                 </div>
                 
-                <!-- Such-Button -->
-                <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
-                    <i class="fas fa-search"></i> Suchen
-                </button>
             </form>
         </div>
         
