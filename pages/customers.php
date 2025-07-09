@@ -1,9 +1,13 @@
-// Websites Tab hinzufügen (falls Kunde mehrere Websites hat)
-<?php if (!empty($customer['websites']) && is_array($customer['websites']) && count($customer['websites']) > 1): ?>
-        <button class="tab" onclick="showTab('websites')" style="padding: 12px 24px; background: none; border: none; color: #8b8fa3; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer;">
-            Websites (<?= count($customer['websites']) ?>)
-        </button>
-<?php endif; ?><?php
+<?php
+session_start();
+require_once 'includes/functions.php';
+
+// Authentifizierung prüfen
+if (!getCurrentUserId()) {
+    header('Location: ?page=login');
+    exit;
+}
+
 $action = $_GET['action'] ?? 'index';
 $customerId = $_GET['id'] ?? null;
 $userId = getCurrentUserId();
@@ -11,15 +15,15 @@ $userId = getCurrentUserId();
 // POST-Verarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
-        $name = trim($_POST['name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $company = trim($_POST['company'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $city = trim($_POST['city'] ?? '');
-        $postal_code = trim($_POST['postal_code'] ?? '');
-        $country = trim($_POST['country'] ?? '');
-        $notes = trim($_POST['notes'] ?? '');
+        $name = sanitizeString($_POST['name'] ?? '');
+        $email = sanitizeString($_POST['email'] ?? '');
+        $phone = sanitizeString($_POST['phone'] ?? '');
+        $company = sanitizeString($_POST['company'] ?? '');
+        $address = sanitizeString($_POST['address'] ?? '');
+        $city = sanitizeString($_POST['city'] ?? '');
+        $postal_code = sanitizeString($_POST['postal_code'] ?? '');
+        $country = sanitizeString($_POST['country'] ?? '');
+        $notes = sanitizeString($_POST['notes'] ?? '');
         $status = $_POST['status'] ?? 'aktiv';
         
         // Websites verarbeiten
@@ -93,15 +97,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'edit' && $customerId) {
         $customers = loadData('customers.json');
         if (isset($customers[$customerId]) && $customers[$customerId]['user_id'] === $userId) {
-            $name = trim($_POST['name'] ?? '');
-            $email = trim($_POST['email'] ?? '');
-            $phone = trim($_POST['phone'] ?? '');
-            $company = trim($_POST['company'] ?? '');
-            $address = trim($_POST['address'] ?? '');
-            $city = trim($_POST['city'] ?? '');
-            $postal_code = trim($_POST['postal_code'] ?? '');
-            $country = trim($_POST['country'] ?? '');
-            $notes = trim($_POST['notes'] ?? '');
+            $name = sanitizeString($_POST['name'] ?? '');
+            $email = sanitizeString($_POST['email'] ?? '');
+            $phone = sanitizeString($_POST['phone'] ?? '');
+            $company = sanitizeString($_POST['company'] ?? '');
+            $address = sanitizeString($_POST['address'] ?? '');
+            $city = sanitizeString($_POST['city'] ?? '');
+            $postal_code = sanitizeString($_POST['postal_code'] ?? '');
+            $country = sanitizeString($_POST['country'] ?? '');
+            $notes = sanitizeString($_POST['notes'] ?? '');
             $status = $_POST['status'] ?? 'aktiv';
             
             // Websites verarbeiten
@@ -175,8 +179,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (saveData('customers.json', $customers)) {
                 redirectWithMessage('?page=customers', 'Kunde erfolgreich gelöscht.');
             } else {
-                $error = 'Fehler beim Löschen des Kunden.';
+                setFlashMessage('Fehler beim Löschen des Kunden.', 'error');
             }
+        }
+    } elseif ($action === 'import_process') {
+        // CSV Import verarbeiten
+        if (isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === 0) {
+            $csvFile = $_FILES['csv_file']['tmp_name'];
+            $hasHeader = isset($_POST['has_header']);
+            
+            $customers = loadData('customers.json');
+            $imported = 0;
+            $errors = [];
+            
+            if (($handle = fopen($csvFile, 'r')) !== FALSE) {
+                $row = 0;
+                while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
+                    $row++;
+                    
+                    // Header-Zeile überspringen
+                    if ($hasHeader && $row === 1) {
+                        continue;
+                    }
+                    
+                    // Daten zuweisen (erwartete Reihenfolge: Name, E-Mail, Telefon, Unternehmen, Adresse, Stadt, PLZ, Land, Notizen)
+                    $name = sanitizeString($data[0] ?? '');
+                    $email = sanitizeString($data[1] ?? '');
+                    $phone = sanitizeString($data[2] ?? '');
+                    $company = sanitizeString($data[3] ?? '');
+                    $address = sanitizeString($data[4] ?? '');
+                    $city = sanitizeString($data[5] ?? '');
+                    $postal_code = sanitizeString($data[6] ?? '');
+                    $country = sanitizeString($data[7] ?? '');
+                    $notes = sanitizeString($data[8] ?? '');
+                    
+                    // Validierung
+                    if (empty($name)) {
+                        $errors[] = "Zeile $row: Name ist erforderlich";
+                        continue;
+                    }
+                    
+                    if (!empty($email) && !validateEmail($email)) {
+                        $errors[] = "Zeile $row: Ungültige E-Mail-Adresse";
+                        continue;
+                    }
+                    
+                    // Kunde erstellen
+                    $newId = generateId();
+                    $customers[$newId] = [
+                        'id' => $newId,
+                        'user_id' => $userId,
+                        'name' => $name,
+                        'email' => $email,
+                        'phone' => $phone,
+                        'company' => $company,
+                        'address' => $address,
+                        'city' => $city,
+                        'postal_code' => $postal_code,
+                        'country' => $country,
+                        'notes' => $notes,
+                        'status' => 'aktiv',
+                        'websites' => [],
+                        'created_at' => date('Y-m-d H:i:s')
+                    ];
+                    
+                    $imported++;
+                }
+                fclose($handle);
+                
+                if (saveData('customers.json', $customers)) {
+                    $message = "Import erfolgreich: $imported Kunden importiert.";
+                    if (!empty($errors)) {
+                        $message .= " Fehler: " . implode(', ', array_slice($errors, 0, 3));
+                        if (count($errors) > 3) {
+                            $message .= ' und ' . (count($errors) - 3) . ' weitere...';
+                        }
+                    }
+                    redirectWithMessage('?page=customers', $message);
+                } else {
+                    $errors[] = 'Fehler beim Speichern der importierten Daten.';
+                }
+            } else {
+                $errors[] = 'CSV-Datei konnte nicht gelesen werden.';
+            }
+        } else {
+            $errors[] = 'Bitte wählen Sie eine gültige CSV-Datei aus.';
         }
     }
 }
@@ -187,22 +274,22 @@ $links = loadData('links.json');
 
 // Benutzer-spezifische Kunden
 $userCustomers = array_filter($customers, function($customer) use ($userId) {
-    return $customer['user_id'] === $userId;
+    return getArrayValue($customer, 'user_id') === $userId;
 });
 
 // Statistiken berechnen
 $activeCustomers = array_filter($userCustomers, function($customer) {
-    return ($customer['status'] ?? 'aktiv') === 'aktiv';
+    return getArrayValue($customer, 'status', 'aktiv') === 'aktiv';
 });
 
 $inactiveCustomers = array_filter($userCustomers, function($customer) {
-    return ($customer['status'] ?? 'aktiv') === 'inaktiv';
+    return getArrayValue($customer, 'status', 'aktiv') === 'inaktiv';
 });
 
 // Länder-Statistiken
 $countryStats = [];
 foreach ($userCustomers as $customer) {
-    $country = $customer['country'] ?? 'Unbekannt';
+    $country = getArrayValue($customer, 'country', 'Unbekannt');
     $countryStats[$country] = ($countryStats[$country] ?? 0) + 1;
 }
 
@@ -295,7 +382,7 @@ if ($action === 'index'): ?>
                                     </a>
                                 </div>
                                 <div style="font-size: 12px; color: #8b8fa3;">
-                                    <?= e($customer['company'] ?? 'Kein Unternehmen') ?>
+                                    <?= e(getArrayValue($customer, 'company', 'Kein Unternehmen')) ?>
                                 </div>
                             </div>
                             <div style="font-size: 11px; color: #8b8fa3;">
@@ -326,12 +413,12 @@ if ($action === 'index'): ?>
             </div>
         </div>
         <div style="display: flex; gap: 12px;">
-            <select class="form-control" id="statusFilter" onchange="filterCustomers()" style="width: auto;">
+            <select class="filter-select" id="statusFilter" onchange="filterCustomers()">
                 <option value="">Alle Status</option>
                 <option value="aktiv">Aktive Kunden</option>
                 <option value="inaktiv">Inaktive Kunden</option>
             </select>
-            <select class="form-control" id="countryFilter" onchange="filterCustomers()" style="width: auto;">
+            <select class="filter-select" id="countryFilter" onchange="filterCustomers()">
                 <option value="">Alle Länder</option>
                 <?php foreach (array_keys($countryStats) as $country): ?>
                     <option value="<?= e($country) ?>"><?= e($country) ?></option>
@@ -372,16 +459,16 @@ if ($action === 'index'): ?>
                             <?php foreach ($userCustomers as $customerId => $customer): 
                                 // Links für diesen Kunden zählen
                                 $customerLinks = array_filter($links, function($link) use ($customerId) {
-                                    return ($link['customer_id'] ?? '') === $customerId;
+                                    return getArrayValue($link, 'customer_id') === $customerId;
                                 });
                                 $linkCount = count($customerLinks);
                             ?>
                                 <tr class="customer-row" 
                                     data-name="<?= strtolower($customer['name']) ?>" 
-                                    data-company="<?= strtolower($customer['company'] ?? '') ?>"
-                                    data-email="<?= strtolower($customer['email'] ?? '') ?>"
-                                    data-status="<?= strtolower($customer['status'] ?? 'aktiv') ?>"
-                                    data-country="<?= strtolower($customer['country'] ?? '') ?>">
+                                    data-company="<?= strtolower(getArrayValue($customer, 'company', '')) ?>"
+                                    data-email="<?= strtolower(getArrayValue($customer, 'email', '')) ?>"
+                                    data-status="<?= strtolower(getArrayValue($customer, 'status', 'aktiv')) ?>"
+                                    data-country="<?= strtolower(getArrayValue($customer, 'country', '')) ?>">
                                     <td>
                                         <div>
                                             <div style="font-weight: 600; color: #e2e8f0;">
@@ -399,7 +486,7 @@ if ($action === 'index'): ?>
                                         </div>
                                     </td>
                                     <td style="color: #8b8fa3;">
-                                        <?= e($customer['company'] ?? '-') ?>
+                                        <?= e(getArrayValue($customer, 'company', '-')) ?>
                                     </td>
                                     <td style="color: #8b8fa3;">
                                         <?php if (!empty($customer['email'])): ?>
@@ -420,11 +507,11 @@ if ($action === 'index'): ?>
                                         <?php endif; ?>
                                     </td>
                                     <td style="color: #8b8fa3;">
-                                        <?= e($customer['country'] ?? '-') ?>
+                                        <?= e(getArrayValue($customer, 'country', '-')) ?>
                                     </td>
                                     <td>
                                         <?php
-                                        $status = $customer['status'] ?? 'aktiv';
+                                        $status = getArrayValue($customer, 'status', 'aktiv');
                                         $badgeClass = $status === 'aktiv' ? 'badge-success' : 'badge-warning';
                                         ?>
                                         <span class="badge <?= $badgeClass ?>">
@@ -467,15 +554,19 @@ if ($action === 'index'): ?>
 
 <?php elseif ($action === 'view' && $customerId): 
     $customer = $customers[$customerId] ?? null;
-    if (!$customer || $customer['user_id'] !== $userId) {
-        header('HTTP/1.0 404 Not Found');
-        include 'pages/404.php';
+    if (!$customer || getArrayValue($customer, 'user_id') !== $userId) {
+        echo '<div class="error-page"><div class="error-content" style="text-align: center; padding: 60px 20px;">';
+        echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f56565; margin-bottom: 16px;"></i>';
+        echo '<h1 style="margin-bottom: 16px;">Kunde nicht gefunden</h1>';
+        echo '<p style="color: #8b8fa3; margin-bottom: 24px;">Der angeforderte Kunde existiert nicht oder Sie haben keine Berechtigung.</p>';
+        echo '<a href="?page=customers" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Zurück zur Kundenverwaltung</a>';
+        echo '</div></div>';
         return;
     }
     
     // Links für diesen Kunden
     $customerLinks = array_filter($links, function($link) use ($customerId) {
-        return ($link['customer_id'] ?? '') === $customerId;
+        return getArrayValue($link, 'customer_id') === $customerId;
     });
 ?>
     <div class="breadcrumb">
@@ -517,6 +608,11 @@ if ($action === 'index'): ?>
         <button class="tab" onclick="showTab('statistics')" style="padding: 12px 24px; background: none; border: none; color: #8b8fa3; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer;">
             Statistiken
         </button>
+        <?php if (!empty($customer['websites']) && is_array($customer['websites']) && count($customer['websites']) > 1): ?>
+            <button class="tab" onclick="showTab('websites')" style="padding: 12px 24px; background: none; border: none; color: #8b8fa3; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer;">
+                Websites (<?= count($customer['websites']) ?>)
+            </button>
+        <?php endif; ?>
     </div>
 
     <!-- Kundeninformationen Tab -->
@@ -601,8 +697,8 @@ if ($action === 'index'): ?>
                         <div class="info-item">
                             <div class="info-label" style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">STATUS</div>
                             <div class="info-value">
-                                <span class="badge <?= ($customer['status'] ?? 'aktiv') === 'aktiv' ? 'badge-success' : 'badge-warning' ?>">
-                                    <?= ucfirst($customer['status'] ?? 'aktiv') ?>
+                                <span class="badge <?= getArrayValue($customer, 'status', 'aktiv') === 'aktiv' ? 'badge-success' : 'badge-warning' ?>">
+                                    <?= ucfirst(getArrayValue($customer, 'status', 'aktiv')) ?>
                                 </span>
                             </div>
                         </div>
@@ -619,7 +715,7 @@ if ($action === 'index'): ?>
                     <div class="info-grid" style="display: grid; gap: 16px;">
                         <div class="info-item">
                             <div class="info-label" style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">UNTERNEHMEN</div>
-                            <div class="info-value" style="color: #e2e8f0;"><?= e($customer['company'] ?? '-') ?></div>
+                            <div class="info-value" style="color: #e2e8f0;"><?= e(getArrayValue($customer, 'company', '-')) ?></div>
                         </div>
                         
                         <?php if (!empty($customer['address']) || !empty($customer['city']) || !empty($customer['postal_code'])): ?>
@@ -630,7 +726,7 @@ if ($action === 'index'): ?>
                                     <?= e($customer['address']) ?><br>
                                 <?php endif; ?>
                                 <?php if (!empty($customer['postal_code']) || !empty($customer['city'])): ?>
-                                    <?= e($customer['postal_code']) ?> <?= e($customer['city']) ?>
+                                    <?= e(getArrayValue($customer, 'postal_code', '')) ?> <?= e(getArrayValue($customer, 'city', '')) ?>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -712,25 +808,25 @@ if ($action === 'index'): ?>
                                 <?php 
                                 $blogs = loadData('blogs.json');
                                 foreach ($customerLinks as $linkId => $link): 
-                                    $blog = $blogs[$link['blog_id']] ?? null;
+                                    $blog = $blogs[getArrayValue($link, 'blog_id', '')] ?? null;
                                 ?>
                                     <tr>
-                                        <td><?= formatDate($link['published_date'] ?? $link['created_at']) ?></td>
+                                        <td><?= formatDate(getArrayValue($link, 'published_date', $link['created_at'])) ?></td>
                                         <td>
                                             <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
-                                                <?= e($link['anchor_text']) ?>
+                                                <?= e(getArrayValue($link, 'anchor_text', '')) ?>
                                             </a>
                                         </td>
                                         <td>
-                                            <a href="<?= e($link['target_url']) ?>" target="_blank" style="color: #4dabf7; text-decoration: none; font-size: 12px;">
-                                                <?= e(strlen($link['target_url']) > 40 ? substr($link['target_url'], 0, 40) . '...' : $link['target_url']) ?>
+                                            <a href="<?= e(getArrayValue($link, 'target_url', '')) ?>" target="_blank" style="color: #4dabf7; text-decoration: none; font-size: 12px;">
+                                                <?= e(truncate(getArrayValue($link, 'target_url', ''), 40)) ?>
                                                 <i class="fas fa-external-link-alt" style="margin-left: 4px; font-size: 10px;"></i>
                                             </a>
                                         </td>
                                         <td>
                                             <?php if ($blog): ?>
-                                                <a href="?page=blogs&action=view&id=<?= $link['blog_id'] ?>" style="color: #4dabf7; text-decoration: none;">
-                                                    <?= e($blog['name']) ?>
+                                                <a href="?page=blogs&action=view&id=<?= getArrayValue($link, 'blog_id') ?>" style="color: #4dabf7; text-decoration: none;">
+                                                    <?= e(getArrayValue($blog, 'name', '')) ?>
                                                 </a>
                                             <?php else: ?>
                                                 <span style="color: #8b8fa3;">-</span>
@@ -738,7 +834,7 @@ if ($action === 'index'): ?>
                                         </td>
                                         <td>
                                             <?php
-                                            $status = $link['status'] ?? 'ausstehend';
+                                            $status = getArrayValue($link, 'status', 'ausstehend');
                                             $badgeClass = 'badge-secondary';
                                             switch ($status) {
                                                 case 'aktiv':
@@ -872,13 +968,13 @@ if ($action === 'index'): ?>
                         </div>
                         <div style="text-align: center; padding: 20px; background-color: #343852; border-radius: 8px;">
                             <div style="font-size: 28px; font-weight: bold; color: #4dabf7; margin-bottom: 8px;">
-                                <?= count(array_filter($customerLinks, function($l) { return ($l['status'] ?? '') === 'aktiv'; })) ?>
+                                <?= count(array_filter($customerLinks, function($l) { return getArrayValue($l, 'status', '') === 'aktiv'; })) ?>
                             </div>
                             <div style="font-size: 14px; color: #8b8fa3;">Aktive Links</div>
                         </div>
                         <div style="text-align: center; padding: 20px; background-color: #343852; border-radius: 8px;">
                             <div style="font-size: 28px; font-weight: bold; color: #fbbf24; margin-bottom: 8px;">
-                                <?= count(array_filter($customerLinks, function($l) { return ($l['status'] ?? '') === 'ausstehend'; })) ?>
+                                <?= count(array_filter($customerLinks, function($l) { return getArrayValue($l, 'status', '') === 'ausstehend'; })) ?>
                             </div>
                             <div style="font-size: 14px; color: #8b8fa3;">Ausstehend</div>
                         </div>
@@ -898,9 +994,13 @@ if ($action === 'index'): ?>
     $customer = null;
     if ($action === 'edit') {
         $customer = $customers[$customerId] ?? null;
-        if (!$customer || $customer['user_id'] !== $userId) {
-            header('HTTP/1.0 404 Not Found');
-            include 'pages/404.php';
+        if (!$customer || getArrayValue($customer, 'user_id') !== $userId) {
+            echo '<div class="error-page"><div class="error-content" style="text-align: center; padding: 60px 20px;">';
+            echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f56565; margin-bottom: 16px;"></i>';
+            echo '<h1 style="margin-bottom: 16px;">Kunde nicht gefunden</h1>';
+            echo '<p style="color: #8b8fa3; margin-bottom: 24px;">Der angeforderte Kunde existiert nicht oder Sie haben keine Berechtigung.</p>';
+            echo '<a href="?page=customers" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Zurück zur Kundenverwaltung</a>';
+            echo '</div></div>';
             return;
         }
     }
@@ -946,7 +1046,7 @@ if ($action === 'index'): ?>
                             name="name" 
                             class="form-control" 
                             placeholder="Vor- und Nachname"
-                            value="<?= e($_POST['name'] ?? $customer['name'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'name', getArrayValue($customer, 'name', ''))) ?>"
                             required
                             autofocus
                         >
@@ -959,7 +1059,7 @@ if ($action === 'index'): ?>
                             name="company" 
                             class="form-control" 
                             placeholder="Firmenname"
-                            value="<?= e($_POST['company'] ?? $customer['company'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'company', getArrayValue($customer, 'company', ''))) ?>"
                         >
                     </div>
                 </div>
@@ -973,7 +1073,7 @@ if ($action === 'index'): ?>
                             name="email" 
                             class="form-control" 
                             placeholder="kunde@example.com"
-                            value="<?= e($_POST['email'] ?? $customer['email'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'email', getArrayValue($customer, 'email', ''))) ?>"
                         >
                     </div>
                     <div class="form-group">
@@ -984,28 +1084,17 @@ if ($action === 'index'): ?>
                             name="phone" 
                             class="form-control" 
                             placeholder="+49 123 456789"
-                            value="<?= e($_POST['phone'] ?? $customer['phone'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'phone', getArrayValue($customer, 'phone', ''))) ?>"
                         >
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="phone" class="form-label">Telefon</label>
-                        <input 
-                            type="tel" 
-                            id="phone" 
-                            name="phone" 
-                            class="form-control" 
-                            placeholder="+49 123 456789"
-                            value="<?= e($_POST['phone'] ?? $customer['phone'] ?? '') ?>"
-                        >
-                    </div>
-                    <div class="form-group">
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-control">
-                            <option value="aktiv" <?= ($_POST['status'] ?? $customer['status'] ?? 'aktiv') === 'aktiv' ? 'selected' : '' ?>>Aktiv</option>
-                            <option value="inaktiv" <?= ($_POST['status'] ?? $customer['status'] ?? 'aktiv') === 'inaktiv' ? 'selected' : '' ?>>Inaktiv</option>
+                            <option value="aktiv" <?= getArrayValue($_POST, 'status', getArrayValue($customer, 'status', 'aktiv')) === 'aktiv' ? 'selected' : '' ?>>Aktiv</option>
+                            <option value="inaktiv" <?= getArrayValue($_POST, 'status', getArrayValue($customer, 'status', 'aktiv')) === 'inaktiv' ? 'selected' : '' ?>>Inaktiv</option>
                         </select>
                     </div>
                 </div>
@@ -1058,7 +1147,7 @@ if ($action === 'index'): ?>
                                         name="websites[<?= $index ?>][url]" 
                                         class="form-control website-url" 
                                         placeholder="https://example.com"
-                                        value="<?= e($website['url'] ?? '') ?>"
+                                        value="<?= e(getArrayValue($website, 'url', '')) ?>"
                                         onchange="updateWebsiteTitle(this)"
                                     >
                                 </div>
@@ -1069,7 +1158,7 @@ if ($action === 'index'): ?>
                                         name="websites[<?= $index ?>][title]" 
                                         class="form-control website-title" 
                                         placeholder="Wird automatisch gefüllt"
-                                        value="<?= e($website['title'] ?? '') ?>"
+                                        value="<?= e(getArrayValue($website, 'title', '')) ?>"
                                     >
                                 </div>
                             </div>
@@ -1081,7 +1170,7 @@ if ($action === 'index'): ?>
                                     name="websites[<?= $index ?>][description]" 
                                     class="form-control" 
                                     placeholder="Kurze Beschreibung der Website (optional)"
-                                    value="<?= e($website['description'] ?? '') ?>"
+                                    value="<?= e(getArrayValue($website, 'description', '')) ?>"
                                 >
                             </div>
                         </div>
@@ -1107,7 +1196,7 @@ if ($action === 'index'): ?>
                         name="address" 
                         class="form-control" 
                         placeholder="Musterstraße 123"
-                        value="<?= e($_POST['address'] ?? $customer['address'] ?? '') ?>"
+                        value="<?= e(getArrayValue($_POST, 'address', getArrayValue($customer, 'address', ''))) ?>"
                     >
                 </div>
 
@@ -1120,7 +1209,7 @@ if ($action === 'index'): ?>
                             name="postal_code" 
                             class="form-control" 
                             placeholder="12345"
-                            value="<?= e($_POST['postal_code'] ?? $customer['postal_code'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'postal_code', getArrayValue($customer, 'postal_code', ''))) ?>"
                         >
                     </div>
                     <div class="form-group">
@@ -1131,7 +1220,7 @@ if ($action === 'index'): ?>
                             name="city" 
                             class="form-control" 
                             placeholder="Musterstadt"
-                            value="<?= e($_POST['city'] ?? $customer['city'] ?? '') ?>"
+                            value="<?= e(getArrayValue($_POST, 'city', getArrayValue($customer, 'city', ''))) ?>"
                         >
                     </div>
                 </div>
@@ -1140,18 +1229,13 @@ if ($action === 'index'): ?>
                     <label for="country" class="form-label">Land</label>
                     <select id="country" name="country" class="form-control">
                         <option value="">Land auswählen</option>
-                        <option value="Deutschland" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Deutschland' ? 'selected' : '' ?>>Deutschland</option>
-                        <option value="Österreich" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Österreich' ? 'selected' : '' ?>>Österreich</option>
-                        <option value="Schweiz" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Schweiz' ? 'selected' : '' ?>>Schweiz</option>
-                        <option value="Niederlande" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Niederlande' ? 'selected' : '' ?>>Niederlande</option>
-                        <option value="Belgien" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Belgien' ? 'selected' : '' ?>>Belgien</option>
-                        <option value="Frankreich" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Frankreich' ? 'selected' : '' ?>>Frankreich</option>
-                        <option value="Italien" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Italien' ? 'selected' : '' ?>>Italien</option>
-                        <option value="Spanien" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Spanien' ? 'selected' : '' ?>>Spanien</option>
-                        <option value="Polen" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Polen' ? 'selected' : '' ?>>Polen</option>
-                        <option value="Tschechien" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Tschechien' ? 'selected' : '' ?>>Tschechien</option>
-                        <option value="Ungarn" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Ungarn' ? 'selected' : '' ?>>Ungarn</option>
-                        <option value="Slowakei" <?= ($_POST['country'] ?? $customer['country'] ?? '') === 'Slowakei' ? 'selected' : '' ?>>Slowakei</option>
+                        <?php 
+                        $countries = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Frankreich', 'Italien', 'Spanien', 'Polen', 'Tschechien', 'Ungarn', 'Slowakei'];
+                        $selectedCountry = getArrayValue($_POST, 'country', getArrayValue($customer, 'country', ''));
+                        foreach ($countries as $country): 
+                        ?>
+                            <option value="<?= e($country) ?>" <?= $selectedCountry === $country ? 'selected' : '' ?>><?= e($country) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 
@@ -1168,7 +1252,7 @@ if ($action === 'index'): ?>
                         class="form-control" 
                         rows="4"
                         placeholder="Interne Notizen, Besonderheiten, etc."
-                    ><?= e($_POST['notes'] ?? $customer['notes'] ?? '') ?></textarea>
+                    ><?= e(getArrayValue($_POST, 'notes', getArrayValue($customer, 'notes', ''))) ?></textarea>
                     <small style="color: #8b8fa3; font-size: 12px;">Diese Notizen sind nur für interne Zwecke sichtbar</small>
                 </div>
 
@@ -1186,6 +1270,130 @@ if ($action === 'index'): ?>
         </div>
     </div>
 
+<?php elseif ($action === 'import'): ?>
+    <div class="breadcrumb">
+        <a href="?page=customers">Zurück zu Kunden</a>
+        <i class="fas fa-chevron-right"></i>
+        <span>Import</span>
+    </div>
+
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">Kunden importieren</h1>
+            <p class="page-subtitle">Importieren Sie Kunden aus einer CSV-Datei</p>
+        </div>
+    </div>
+
+    <?php if (!empty($errors)): ?>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            <ul style="margin: 0; padding-left: 20px;">
+                <?php foreach ($errors as $error): ?>
+                    <li><?= e($error) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    <?php endif; ?>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>CSV-Format:</strong> Die erste Zeile sollte die Spaltennamen enthalten: Name, E-Mail, Telefon, Unternehmen, Adresse, Stadt, PLZ, Land, Notizen
+            </div>
+
+            <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="import_process">
+                
+                <div class="form-group">
+                    <label for="csv_file" class="form-label">CSV-Datei auswählen</label>
+                    <input 
+                        type="file" 
+                        id="csv_file" 
+                        name="csv_file" 
+                        class="form-control" 
+                        accept=".csv"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <input type="checkbox" name="has_header" value="1" checked>
+                        Erste Zeile enthält Spaltennamen
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i>
+                        Kunden importieren
+                    </button>
+                    <a href="?page=customers" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                        Abbrechen
+                    </a>
+                </div>
+            </form>
+
+            <div style="margin-top: 30px;">
+                <h4>CSV-Vorlage herunterladen</h4>
+                <p style="color: #8b8fa3;">Laden Sie eine Beispiel-CSV-Datei herunter, um das richtige Format zu sehen:</p>
+                <button type="button" class="btn btn-secondary" onclick="downloadTemplate()">
+                    <i class="fas fa-download"></i>
+                    CSV-Vorlage herunterladen
+                </button>
+            </div>
+        </div>
+    </div>
+
+<?php elseif ($action === 'export'): ?>
+    <?php
+    // CSV-Export der Kunden
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="kunden_export_' . date('Y-m-d') . '.csv"');
+    
+    $output = fopen('php://output', 'w');
+    
+    // BOM für UTF-8
+    fwrite($output, "\xEF\xBB\xBF");
+    
+    // CSV-Header
+    fputcsv($output, [
+        'Name',
+        'E-Mail',
+        'Telefon',
+        'Unternehmen',
+        'Adresse',
+        'Stadt',
+        'PLZ',
+        'Land',
+        'Status',
+        'Notizen',
+        'Erstellt am'
+    ], ';');
+    
+    // Kundendaten
+    foreach ($userCustomers as $customer) {
+        fputcsv($output, [
+            $customer['name'],
+            getArrayValue($customer, 'email', ''),
+            getArrayValue($customer, 'phone', ''),
+            getArrayValue($customer, 'company', ''),
+            getArrayValue($customer, 'address', ''),
+            getArrayValue($customer, 'city', ''),
+            getArrayValue($customer, 'postal_code', ''),
+            getArrayValue($customer, 'country', ''),
+            getArrayValue($customer, 'status', 'aktiv'),
+            getArrayValue($customer, 'notes', ''),
+            $customer['created_at']
+        ], ';');
+    }
+    
+    fclose($output);
+    exit;
+    ?>
+
 <?php else: ?>
     <div class="error-page">
         <div class="error-content" style="text-align: center; padding: 60px 20px;">
@@ -1201,11 +1409,99 @@ if ($action === 'index'): ?>
 <?php endif; ?>
 
 <script>
+// CSS für Filter-Dropdowns
+const filterCSS = `
+.filter-select {
+    background-color: #343852;
+    border: 1px solid #3a3d52;
+    border-radius: 6px;
+    color: #e2e8f0;
+    padding: 8px 12px;
+    font-size: 14px;
+    min-width: 120px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.filter-select:hover {
+    border-color: #4dabf7;
+}
+
+.filter-select:focus {
+    border-color: #4dabf7;
+    box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.1);
+}
+
+.filter-select option {
+    background-color: #343852;
+    color: #e2e8f0;
+    padding: 8px;
+}
+
+.search-input {
+    background-color: #343852 !important;
+    border: 1px solid #3a3d52 !important;
+    border-radius: 6px !important;
+    color: #e2e8f0 !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    width: 100% !important;
+    outline: none !important;
+    transition: border-color 0.2s ease !important;
+}
+
+.search-input:hover {
+    border-color: #4dabf7 !important;
+}
+
+.search-input:focus {
+    border-color: #4dabf7 !important;
+    box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.1) !important;
+}
+
+.search-input::placeholder {
+    color: #8b8fa3 !important;
+}
+
+.action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+    .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-bar {
+        width: 100% !important;
+        max-width: none !important;
+    }
+    
+    .filter-select {
+        min-width: 100px;
+    }
+}
+`;
+
+// CSS in den Head einfügen
+const style = document.createElement('style');
+style.textContent = filterCSS;
+document.head.appendChild(style);
+
 // Websites-Management JavaScript
-let websiteCounter = <?= count($websites) ?>;
+let websiteCounter = <?= count($websites ?? []) ?>;
 
 function addWebsite() {
     const container = document.getElementById('websitesContainer');
+    if (!container) return;
+    
     const websiteItem = document.createElement('div');
     websiteItem.className = 'website-item';
     websiteItem.style.cssText = 'background: #343852; padding: 16px; border-radius: 6px; margin-bottom: 16px; position: relative;';
@@ -1258,14 +1554,17 @@ function addWebsite() {
     websiteCounter++;
     
     // Focus auf die neue URL-Eingabe
-    websiteItem.querySelector('.website-url').focus();
+    const urlInput = websiteItem.querySelector('.website-url');
+    if (urlInput) urlInput.focus();
 }
 
 function removeWebsite(button) {
     if (confirm('Website wirklich entfernen?')) {
         const websiteItem = button.closest('.website-item');
-        websiteItem.remove();
-        updateWebsiteNumbers();
+        if (websiteItem) {
+            websiteItem.remove();
+            updateWebsiteNumbers();
+        }
     }
 }
 
@@ -1273,7 +1572,9 @@ function updateWebsiteNumbers() {
     const websiteItems = document.querySelectorAll('.website-item');
     websiteItems.forEach((item, index) => {
         const title = item.querySelector('h4');
-        title.innerHTML = `<i class="fas fa-globe" style="margin-right: 8px; color: #4dabf7;"></i>Website ${index + 1}`;
+        if (title) {
+            title.innerHTML = `<i class="fas fa-globe" style="margin-right: 8px; color: #4dabf7;"></i>Website ${index + 1}`;
+        }
         
         // Update input names
         const inputs = item.querySelectorAll('input');
@@ -1291,7 +1592,10 @@ function updateWebsiteNumbers() {
 
 function updateWebsiteTitle(urlInput) {
     const websiteItem = urlInput.closest('.website-item');
+    if (!websiteItem) return;
+    
     const titleInput = websiteItem.querySelector('.website-title');
+    if (!titleInput) return;
     
     if (urlInput.value && !titleInput.value) {
         try {
@@ -1302,10 +1606,17 @@ function updateWebsiteTitle(urlInput) {
         }
     }
 }
+
 function filterCustomers() {
-    const search = document.getElementById('customerSearch').value.toLowerCase();
-    const statusFilter = document.getElementById('statusFilter').value.toLowerCase();
-    const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
+    const search = document.getElementById('customerSearch');
+    const statusFilter = document.getElementById('statusFilter');
+    const countryFilter = document.getElementById('countryFilter');
+    
+    if (!search || !statusFilter || !countryFilter) return;
+    
+    const searchValue = search.value.toLowerCase();
+    const statusValue = statusFilter.value.toLowerCase();
+    const countryValue = countryFilter.value.toLowerCase();
     const rows = document.querySelectorAll('.customer-row');
     
     rows.forEach(row => {
@@ -1315,13 +1626,13 @@ function filterCustomers() {
         const status = row.dataset.status || '';
         const country = row.dataset.country || '';
         
-        const searchMatch = !search || 
-            name.includes(search) || 
-            company.includes(search) || 
-            email.includes(search);
+        const searchMatch = !searchValue || 
+            name.includes(searchValue) || 
+            company.includes(searchValue) || 
+            email.includes(searchValue);
         
-        const statusMatch = !statusFilter || status === statusFilter;
-        const countryMatch = !countryFilter || country === countryFilter;
+        const statusMatch = !statusValue || status === statusValue;
+        const countryMatch = !countryValue || country === countryValue;
         
         const matches = searchMatch && statusMatch && countryMatch;
         row.style.display = matches ? 'table-row' : 'none';
@@ -1331,13 +1642,15 @@ function filterCustomers() {
     const visibleRows = document.querySelectorAll('.customer-row[style="table-row"], .customer-row:not([style*="none"])');
     const tableBody = document.getElementById('customerTableBody');
     
+    if (!tableBody) return;
+    
     // Entferne existierende "Keine Ergebnisse" Zeile
     const noResultsRow = tableBody.querySelector('.no-results-row');
     if (noResultsRow) {
         noResultsRow.remove();
     }
     
-    if (visibleRows.length === 0 && tableBody) {
+    if (visibleRows.length === 0) {
         const noResultsRow = document.createElement('tr');
         noResultsRow.className = 'no-results-row';
         noResultsRow.innerHTML = `
@@ -1364,14 +1677,34 @@ function showTab(tabName) {
     });
     
     // Gewählten Tab anzeigen
-    document.getElementById(tabName + 'Tab').style.display = 'block';
+    const targetTab = document.getElementById(tabName + 'Tab');
+    if (targetTab) {
+        targetTab.style.display = 'block';
+    }
     
     // Aktiven Tab-Button markieren
-    event.target.style.color = '#4dabf7';
-    event.target.style.borderBottomColor = '#4dabf7';
+    if (event && event.target) {
+        event.target.style.color = '#4dabf7';
+        event.target.style.borderBottomColor = '#4dabf7';
+    }
 }
 
-// Form-Validierung verbessern
+// CSV-Template Download
+function downloadTemplate() {
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + "Name,E-Mail,Telefon,Unternehmen,Adresse,Stadt,PLZ,Land,Notizen\n"
+        + "Max Mustermann,max@example.com,+49 123 456789,Musterfirma GmbH,Musterstraße 1,Berlin,10115,Deutschland,Beispielnotiz";
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "kunden_vorlage.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Form-Validierung
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form[method="post"]');
     if (form) {
@@ -1402,6 +1735,31 @@ document.addEventListener('DOMContentLoaded', function() {
             postalInput.addEventListener('input', function() {
                 this.value = this.value.replace(/[^\d]/g, '');
             });
+        }
+    }
+    
+    // Initialisiere Websiteanzahl korrekt
+    const websiteItems = document.querySelectorAll('.website-item');
+    websiteCounter = websiteItems.length;
+});
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + N für neuen Kunden
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        if (window.location.search.includes('page=customers')) {
+            window.location.href = '?page=customers&action=create';
+        }
+    }
+    
+    // ESC zum Abbrechen
+    if (e.key === 'Escape') {
+        const currentUrl = window.location.search;
+        if (currentUrl.includes('action=create') || currentUrl.includes('action=edit')) {
+            if (confirm('Möchten Sie wirklich abbrechen? Nicht gespeicherte Änderungen gehen verloren.')) {
+                window.location.href = '?page=customers';
+            }
         }
     }
 });
