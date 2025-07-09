@@ -5,7 +5,7 @@
  */
 
 // Debug-Modus aktivieren (für Entwicklung)
-$debug = false;
+$debug = true;
 
 // Basis-Variablen
 $action = $_GET['action'] ?? 'index';
@@ -357,7 +357,7 @@ if ($action === 'index'): ?>
     <!-- Filter und Suche -->
     <?php if (!empty($userBlogs)): ?>
         <div class="action-bar" style="margin-top: 30px;">
-            <div class="search-bar" style="flex: 1; max-width: 400px;">
+            <div class="search-bar" style="flex: 1; min-width: 280px; max-width: 400px;">
                 <div style="position: relative;">
                     <i class="fas fa-search search-icon"></i>
                     <input 
@@ -369,15 +369,15 @@ if ($action === 'index'): ?>
                     >
                 </div>
             </div>
-            <div style="display: flex; gap: 12px;">
-                <select class="form-control" id="topicFilter" onchange="filterBlogs()" style="width: auto;">
+            <div class="filter-controls">
+                <select class="form-control filter-select" id="topicFilter" onchange="filterBlogs()">
                     <option value="">Nach Topic filtern</option>
                     <?php foreach (array_keys($topicStats) as $topic): ?>
                         <option value="<?= e($topic) ?>"><?= e($topic) ?></option>
                     <?php endforeach; ?>
                 </select>
                 <?php if ($isAdmin && count($userBlogs) > 0): ?>
-                    <select class="form-control" id="userFilter" onchange="filterBlogs()" style="width: auto;">
+                    <select class="form-control filter-select" id="userFilter" onchange="filterBlogs()">
                         <option value="">Nach Benutzer filtern</option>
                         <?php 
                         $userIds = array_unique(array_column($userBlogs, 'user_id'));
@@ -421,7 +421,7 @@ if ($action === 'index'): ?>
                      data-name="<?= strtolower($blog['name'] ?? '') ?>" 
                      data-url="<?= strtolower($blog['url'] ?? '') ?>"
                      data-topics="<?= strtolower(implode(' ', $blog['topics'] ?? [])) ?>"
-                     data-user-id="<?= e($blog['user_id'] ?? '') ?>"
+                     data-user-id="<?= $blog['user_id'] ?? '' ?>"
                      data-owner="<?= strtolower($ownerName) ?>">
                     <div class="card-body">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
@@ -977,20 +977,44 @@ function filterBlogs() {
     const userFilter = document.getElementById('userFilter')?.value || '';
     const cards = document.querySelectorAll('.blog-card');
     
-    cards.forEach(card => {
+    console.log('Filter aktiv:', { search, topicFilter, userFilter }); // Debug
+    
+    let visibleCount = 0;
+    
+    cards.forEach((card, index) => {
         const name = card.dataset.name || '';
         const url = card.dataset.url || '';
         const topics = card.dataset.topics || '';
         const userId = card.dataset.userId || '';
         const owner = card.dataset.owner || '';
         
+        // Debug für ersten Card
+        if (index === 0) {
+            console.log('Erste Karte Daten:', {
+                name, url, topics, userId, owner
+            });
+        }
+        
         const searchMatch = !search || name.includes(search) || url.includes(search) || owner.includes(search);
         const topicMatch = !topicFilter || topics.includes(topicFilter);
         const userMatch = !userFilter || userId === userFilter;
         
         const matches = searchMatch && topicMatch && userMatch;
-        card.style.display = matches ? 'block' : 'none';
+        
+        // Debug für User-Filter
+        if (userFilter) {
+            console.log(`Karte ${index}: userId="${userId}", userFilter="${userFilter}", match=${userMatch}`);
+        }
+        
+        if (matches) {
+            card.style.display = 'block';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
     });
+    
+    console.log(`${visibleCount} von ${cards.length} Karten sichtbar`);
 }
 
 function showTab(tabName) {
@@ -1011,7 +1035,9 @@ function showTab(tabName) {
     }
     
     // Button aktivieren
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
 }
 
 // Auto-save für Formulare (optional)
@@ -1026,6 +1052,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    
+    // Debug: User-Filter Optionen anzeigen
+    const userFilter = document.getElementById('userFilter');
+    if (userFilter) {
+        console.log('User-Filter Optionen:');
+        Array.from(userFilter.options).forEach((option, index) => {
+            console.log(`${index}: value="${option.value}", text="${option.text}"`);
+        });
+    }
 });
 </script>
 
@@ -1073,18 +1108,90 @@ document.addEventListener('DOMContentLoaded', function() {
     gap: 16px;
 }
 
+/* Filter-Dropdowns optimiert */
+.filter-select {
+    min-width: 180px;
+    max-width: 220px;
+    white-space: nowrap;
+}
+
+/* Action-Bar Layout optimiert */
+.action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background-color: #2a2d42;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #3a3d52;
+}
+
+.search-bar {
+    flex: 1;
+    min-width: 280px;
+    max-width: 400px;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Responsive Design verbessert */
+@media (max-width: 1200px) {
+    .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .filter-controls {
+        justify-content: flex-end;
+    }
+    
+    .filter-select {
+        min-width: 160px;
+        max-width: 200px;
+    }
+}
+
 @media (max-width: 768px) {
     .form-row {
         grid-template-columns: 1fr;
     }
     
     .action-bar {
-        flex-direction: column;
         gap: 12px;
     }
     
-    .action-bar > div {
+    .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    
+    .filter-select {
         width: 100%;
+        max-width: none;
+    }
+    
+    .search-bar {
+        min-width: auto;
+        max-width: none;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .action-bar {
+        padding: 12px;
+    }
+    
+    .search-input {
+        font-size: 16px; /* Verhindert Zoom auf iOS */
     }
 }
 </style>
