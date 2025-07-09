@@ -1,11 +1,8 @@
 <?php
 /**
  * LinkBuilder Pro - Blogs Verwaltung
- * pages/blogs.php - Vollständige und funktionierende Version
+ * pages/blogs.php - Vollständige Version ohne Debug
  */
-
-// Debug-Modus aktivieren (für Entwicklung)
-$debug = true;
 
 // Basis-Variablen
 $action = $_GET['action'] ?? 'index';
@@ -84,18 +81,6 @@ if (!$currentUser) {
         ];
         saveData('blogs.json', $blogs);
     }
-}
-
-// Debug-Ausgabe (nur wenn aktiviert)
-if ($debug && $action === 'index') {
-    echo '<div style="background: #f8f9fa; padding: 15px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 5px; font-family: monospace; font-size: 12px;">';
-    echo '<strong>🔧 DEBUG INFORMATION:</strong><br>';
-    echo 'User ID: ' . htmlspecialchars($userId) . '<br>';
-    echo 'Current User: ' . ($currentUser ? $currentUser['name'] : 'NICHT GEFUNDEN') . '<br>';
-    echo 'Is Admin: ' . ($isAdmin ? 'JA' : 'NEIN') . '<br>';
-    echo 'Session Status: ' . session_status() . '<br>';
-    echo 'Blogs-Datei existiert: ' . (file_exists(__DIR__ . '/../data/blogs.json') ? 'JA' : 'NEIN') . '<br>';
-    echo '</div>';
 }
 
 // POST-Verarbeitung
@@ -255,6 +240,41 @@ if ($isAdmin) {
     });
 }
 
+// Server-seitige Filterung anwenden
+$activeFilters = [];
+
+// User-Filter
+if (isset($_GET['user_filter']) && !empty($_GET['user_filter'])) {
+    $userFilterId = $_GET['user_filter'];
+    $userBlogs = array_filter($userBlogs, function($blog) use ($userFilterId) {
+        return isset($blog['user_id']) && $blog['user_id'] === $userFilterId;
+    });
+    $activeFilters['user'] = $userFilterId;
+}
+
+// Topic-Filter
+if (isset($_GET['topic_filter']) && !empty($_GET['topic_filter'])) {
+    $topicFilter = $_GET['topic_filter'];
+    $userBlogs = array_filter($userBlogs, function($blog) use ($topicFilter) {
+        return isset($blog['topics']) && in_array($topicFilter, $blog['topics']);
+    });
+    $activeFilters['topic'] = $topicFilter;
+}
+
+// Such-Filter
+if (isset($_GET['search']) && !empty($_GET['search'])) {
+    $searchTerm = strtolower($_GET['search']);
+    $userBlogs = array_filter($userBlogs, function($blog) use ($searchTerm) {
+        $name = strtolower($blog['name'] ?? '');
+        $url = strtolower($blog['url'] ?? '');
+        $description = strtolower($blog['description'] ?? '');
+        return strpos($name, $searchTerm) !== false || 
+               strpos($url, $searchTerm) !== false || 
+               strpos($description, $searchTerm) !== false;
+    });
+    $activeFilters['search'] = $_GET['search'];
+}
+
 // Statistiken berechnen
 $topicStats = [];
 foreach ($userBlogs as $blog) {
@@ -391,50 +411,99 @@ if ($action === 'index'): ?>
     </div>
 
     <!-- Filter und Suche -->
-    <?php if (!empty($userBlogs)): ?>
-        <!-- Debug-Bereich (nur wenn Debug aktiv) -->
-        <?php if ($debug): ?>
-            <div id="debugOutput" style="background: #1a1d2e; border: 1px solid #4dabf7; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace; font-size: 12px; color: #4dabf7;">
-                <strong>🔍 Filter-Debug:</strong>
-                <div id="debugContent">Wählen Sie einen Filter aus...</div>
+    <?php if (!empty($blogs)): // Verwende $blogs statt $userBlogs für Filter-Optionen ?>
+        <div class="action-bar" style="margin-top: 30px;">
+            <!-- Filter-Formular -->
+            <form method="GET" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%;">
+                <input type="hidden" name="page" value="blogs">
+                
+                <div class="search-bar" style="flex: 1; min-width: 280px; max-width: 400px;">
+                    <div style="position: relative;">
+                        <i class="fas fa-search search-icon"></i>
+                        <input 
+                            type="text" 
+                            class="form-control search-input" 
+                            placeholder="Blogs durchsuchen (Name, URL<?= $isAdmin ? ', Besitzer' : '' ?>)"
+                            name="search"
+                            value="<?= e($_GET['search'] ?? '') ?>"
+                        >
+                    </div>
+                </div>
+                
+                <div class="filter-controls">
+                    <select class="form-control filter-select" name="topic_filter" onchange="this.form.submit()">
+                        <option value="">Nach Topic filtern</option>
+                        <?php 
+                        // Alle verfügbaren Topics aus allen Blogs sammeln
+                        $allTopics = [];
+                        foreach ($blogs as $blog) {
+                            if (isset($blog['topics']) && is_array($blog['topics'])) {
+                                foreach ($blog['topics'] as $topic) {
+                                    $allTopics[$topic] = ($allTopics[$topic] ?? 0) + 1;
+                                }
+                            }
+                        }
+                        arsort($allTopics);
+                        foreach (array_keys($allTopics) as $topic): 
+                            $selected = (isset($_GET['topic_filter']) && $_GET['topic_filter'] === $topic) ? 'selected' : '';
+                        ?>
+                            <option value="<?= e($topic) ?>" <?= $selected ?>><?= e($topic) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    
+                    <?php if ($isAdmin && count($blogs) > 0): ?>
+                        <select class="form-control filter-select" name="user_filter" onchange="this.form.submit()">
+                            <option value="">Nach Benutzer filtern</option>
+                            <?php 
+                            $userIds = array_unique(array_column($blogs, 'user_id'));
+                            foreach ($userIds as $uid): 
+                                $user = $users[$uid] ?? null;
+                                if ($user):
+                                    $selected = (isset($_GET['user_filter']) && $_GET['user_filter'] === $uid) ? 'selected' : '';
+                            ?>
+                                <option value="<?= e($uid) ?>" <?= $selected ?>><?= e($user['name'] ?? $user['username'] ?? 'Unbekannt') ?></option>
+                            <?php endif; endforeach; ?>
+                        </select>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($activeFilters)): ?>
+                        <a href="?page=blogs" class="btn btn-secondary" style="white-space: nowrap;">
+                            <i class="fas fa-times"></i> Filter zurücksetzen
+                        </a>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Such-Button -->
+                <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+                    <i class="fas fa-search"></i> Suchen
+                </button>
+            </form>
+        </div>
+        
+        <!-- Aktive Filter anzeigen -->
+        <?php if (!empty($activeFilters)): ?>
+            <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <span style="color: #8b8fa3; font-size: 14px; margin-right: 8px;">Aktive Filter:</span>
+                <?php foreach ($activeFilters as $type => $value): ?>
+                    <span class="badge badge-info" style="display: flex; align-items: center; gap: 6px;">
+                        <?php if ($type === 'user'): ?>
+                            <i class="fas fa-user"></i>
+                            <?= e($users[$value]['name'] ?? $users[$value]['username'] ?? 'Unbekannt') ?>
+                        <?php elseif ($type === 'topic'): ?>
+                            <i class="fas fa-tag"></i>
+                            <?= e($value) ?>
+                        <?php elseif ($type === 'search'): ?>
+                            <i class="fas fa-search"></i>
+                            "<?= e($value) ?>"
+                        <?php endif; ?>
+                        <a href="?page=blogs<?= $type === 'user' ? (isset($_GET['topic_filter']) ? '&topic_filter=' . urlencode($_GET['topic_filter']) : '') . (isset($_GET['search']) ? '&search=' . urlencode($_GET['search']) : '') : ($type === 'topic' ? (isset($_GET['user_filter']) ? '&user_filter=' . urlencode($_GET['user_filter']) : '') . (isset($_GET['search']) ? '&search=' . urlencode($_GET['search']) : '') : (isset($_GET['user_filter']) ? '&user_filter=' . urlencode($_GET['user_filter']) : '') . (isset($_GET['topic_filter']) ? '&topic_filter=' . urlencode($_GET['topic_filter']) : '')) ?>" 
+                           style="color: white; margin-left: 4px; text-decoration: none;">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </span>
+                <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        
-        <div class="action-bar" style="margin-top: 30px;">
-            <div class="search-bar" style="flex: 1; min-width: 280px; max-width: 400px;">
-                <div style="position: relative;">
-                    <i class="fas fa-search search-icon"></i>
-                    <input 
-                        type="text" 
-                        class="form-control search-input" 
-                        placeholder="Blogs durchsuchen (Name, URL<?= $isAdmin ? ', Besitzer' : '' ?>)"
-                        id="blogSearch"
-                        onkeyup="filterBlogs()"
-                    >
-                </div>
-            </div>
-            <div class="filter-controls">
-                <select class="form-control filter-select" id="topicFilter" onchange="filterBlogs()">
-                    <option value="">Nach Topic filtern</option>
-                    <?php foreach (array_keys($topicStats) as $topic): ?>
-                        <option value="<?= e($topic) ?>"><?= e($topic) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <?php if ($isAdmin && count($userBlogs) > 0): ?>
-                    <select class="form-control filter-select" id="userFilter" onchange="filterBlogs()">
-                        <option value="">Nach Benutzer filtern</option>
-                        <?php 
-                        $userIds = array_unique(array_column($userBlogs, 'user_id'));
-                        foreach ($userIds as $uid): 
-                            $user = $users[$uid] ?? null;
-                            if ($user):
-                        ?>
-                            <option value="<?= e($uid) ?>"><?= e($user['name'] ?? $user['username'] ?? 'Unbekannt') ?></option>
-                        <?php endif; endforeach; ?>
-                    </select>
-                <?php endif; ?>
-            </div>
-        </div>
     <?php endif; ?>
 
     <?php if (empty($userBlogs)): ?>
@@ -1015,66 +1084,6 @@ if ($action === 'index'): ?>
 <?php endif; ?>
 
 <script>
-function debugLog(message) {
-    // Console-Log
-    console.log(message);
-    
-    // Sichtbarer Debug-Bereich
-    const debugDiv = document.getElementById('debugContent');
-    if (debugDiv) {
-        const timestamp = new Date().toLocaleTimeString();
-        debugDiv.innerHTML += `<br>[${timestamp}] ${message}`;
-        
-        // Scroll zum Ende
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-    }
-}
-
-function filterBlogs() {
-    const search = document.getElementById('blogSearch')?.value.toLowerCase() || '';
-    const topicFilter = document.getElementById('topicFilter')?.value.toLowerCase() || '';
-    const userFilter = document.getElementById('userFilter')?.value || '';
-    const cards = document.querySelectorAll('.blog-card');
-    
-    debugLog(`🔍 Filter gestartet: Search="${search}", Topic="${topicFilter}", User="${userFilter}"`);
-    
-    let visibleCount = 0;
-    let totalCards = cards.length;
-    
-    cards.forEach((card, index) => {
-        const name = card.dataset.name || '';
-        const url = card.dataset.url || '';
-        const topics = card.dataset.topics || '';
-        const userId = card.dataset.userId || '';
-        const owner = card.dataset.owner || '';
-        
-        // Debug für erste Karte oder wenn User-Filter aktiv
-        if (index === 0 || userFilter) {
-            debugLog(`📋 Karte ${index}: name="${name}", userId="${userId}", owner="${owner}"`);
-        }
-        
-        const searchMatch = !search || name.includes(search) || url.includes(search) || owner.includes(search);
-        const topicMatch = !topicFilter || topics.includes(topicFilter);
-        const userMatch = !userFilter || userId === userFilter;
-        
-        // Debug für User-Filter
-        if (userFilter) {
-            debugLog(`🔍 User-Match Karte ${index}: "${userId}" === "${userFilter}" = ${userMatch}`);
-        }
-        
-        const matches = searchMatch && topicMatch && userMatch;
-        
-        if (matches) {
-            card.style.display = 'block';
-            visibleCount++;
-        } else {
-            card.style.display = 'none';
-        }
-    });
-    
-    debugLog(`✅ Ergebnis: ${visibleCount} von ${totalCards} Karten sichtbar`);
-}
-
 function showTab(tabName) {
     // Alle Tabs verstecken
     document.querySelectorAll('.tab-content').forEach(tab => {
@@ -1098,49 +1107,17 @@ function showTab(tabName) {
     }
 }
 
-// Initialisierung beim Laden der Seite
+// Einfache Form-Übermittlung für Such-Input
 document.addEventListener('DOMContentLoaded', function() {
-    debugLog('🚀 Seite geladen, initialisiere Filter...');
-    
-    // User-Filter Optionen anzeigen
-    const userFilter = document.getElementById('userFilter');
-    if (userFilter) {
-        debugLog('👥 User-Filter Optionen gefunden:');
-        Array.from(userFilter.options).forEach((option, index) => {
-            if (option.value) { // Nur echte Optionen, nicht den Platzhalter
-                debugLog(`   ${index}: value="${option.value}", text="${option.text}"`);
-            }
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                searchInput.form.submit();
+            }, 1000); // 1 Sekunde Verzögerung
         });
-    } else {
-        debugLog('❌ User-Filter nicht gefunden (nicht Admin oder keine Blogs)');
-    }
-    
-    // Blog-Karten analysieren
-    const cards = document.querySelectorAll('.blog-card');
-    debugLog(`📊 ${cards.length} Blog-Karten gefunden`);
-    
-    cards.forEach((card, index) => {
-        if (index < 3) { // Nur erste 3 zur Übersicht
-            debugLog(`   Karte ${index}: userId="${card.dataset.userId}", owner="${card.dataset.owner}"`);
-        }
-    });
-    
-    // Test-Button hinzufügen (nur im Debug-Modus)
-    const debugDiv = document.getElementById('debugOutput');
-    if (debugDiv) {
-        const testButton = document.createElement('button');
-        testButton.innerHTML = '🧪 Test User-Filter';
-        testButton.style.cssText = 'margin-top: 10px; padding: 5px 10px; background: #4dabf7; color: white; border: none; border-radius: 3px; cursor: pointer;';
-        testButton.onclick = function() {
-            const userFilter = document.getElementById('userFilter');
-            if (userFilter && userFilter.options.length > 1) {
-                userFilter.selectedIndex = 1; // Ersten echten User auswählen
-                filterBlogs();
-            } else {
-                debugLog('❌ Keine User-Filter Optionen verfügbar');
-            }
-        };
-        debugDiv.appendChild(testButton);
     }
 });
 </script>
