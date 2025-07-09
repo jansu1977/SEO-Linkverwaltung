@@ -1,0 +1,39 @@
+{
+    "general": {
+        "app_name": "LinkBuilder Pro",
+        "company_name": "",
+        "timezone": "Europe\/Berlin",
+        "date_format": "d.m.Y",
+        "currency": "EUR",
+        "items_per_page": 25,
+        "auto_backup": false,
+        "backup_retention_days": 30
+    },
+    "topics": {
+        "custom_topics": [],
+        "predefined_topics": [
+            "SEO",
+            "Content Marketing",
+            "Linkbuilding",
+            "Digital Marketing",
+            "Webentwicklung",
+            "E-Commerce"
+        ],
+        "auto_suggest": true,
+        "case_sensitive": false
+    },
+    "notifications": {
+        "email_enabled": false,
+        "admin_email": "",
+        "smtp_host": "",
+        "smtp_port": 587,
+        "smtp_username": "",
+        "smtp_password": "",
+        "smtp_encryption": "tls",
+        "link_expiry_warning": true,
+        "expiry_warning_days": 7,
+        "broken_link_warning": true,
+        "daily_summary": false,
+        "weekly_report": false
+    }
+}

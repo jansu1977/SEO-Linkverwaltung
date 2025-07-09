@@ -1,0 +1,29 @@
+{
+    "686d96271e7c14.50908174": {
+        "id": "686d96271e7c14.50908174",
+        "user_id": "686d96270d1403.01155465",
+        "name": "Tech Blog",
+        "url": "https:\/\/tech-blog.example.com",
+        "description": "Ein Blog über Technologie und Innovation",
+        "topics": [
+            "Technologie",
+            "Innovation",
+            "Digital"
+        ],
+        "created_at": "2025-07-08 22:05:27",
+        "updated_at": "2025-07-08 22:06:37"
+    },
+    "686d96271e7c74.54454598": {
+        "id": "686d96271e7c74.54454598",
+        "user_id": "686d96270d1403.01155465",
+        "name": "Marketing Insights",
+        "url": "https:\/\/marketing-blog.example.com",
+        "description": "Insights und Tipps für erfolgreiches Marketing",
+        "topics": [
+            "Marketing",
+            "SEO",
+            "Content"
+        ],
+        "created_at": "2025-07-08 22:05:27"
+    }
+}

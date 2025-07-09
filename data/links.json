@@ -1,0 +1,26 @@
+{
+    "686d96271e8479.09243643": {
+        "id": "686d96271e8479.09243643",
+        "user_id": "686d96270d1403.01155465",
+        "customer_id": "686d96271dafc2.33875838",
+        "blog_id": "686d96271e7c14.50908174",
+        "anchor_text": "Innovative Lösungen",
+        "target_url": "https:\/\/musterfirma.de\/loesungen",
+        "published_date": "2025-07-08",
+        "status": "aktiv",
+        "notes": "Link in Tech-Artikel platziert",
+        "created_at": "2025-07-08 22:05:27"
+    },
+    "686d96271e84a1.50881844": {
+        "id": "686d96271e84a1.50881844",
+        "user_id": "686d96270d1403.01155465",
+        "customer_id": "686d96271db017.28476789",
+        "blog_id": "686d96271e7c74.54454598",
+        "anchor_text": "Marketing Strategien",
+        "target_url": "https:\/\/beispiel-ag.de\/marketing",
+        "published_date": "2025-07-08",
+        "status": "ausstehend",
+        "notes": "Wartet auf Freigabe",
+        "created_at": "2025-07-08 22:05:27"
+    }
+}

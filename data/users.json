@@ -1,0 +1,45 @@
+{
+    "686d96270d1403.01155465": {
+        "id": "686d96270d1403.01155465",
+        "username": "admin",
+        "email": "info@seogoal.de",
+        "password": "$2y$10$2QUXQrD4B0steDnMG1RAEeF368xuR4jSW\/aL9pW98jkL\/odK2CsPG",
+        "role": "admin",
+        "created_at": "2025-07-08 22:05:27",
+        "name": "admin",
+        "company": "SeoGoal",
+        "phone": "04338 999444333",
+        "updated_at": "2025-07-09 09:24:17",
+        "reset_token": null,
+        "reset_expires": null,
+        "last_login": "2025-07-09 10:13:47"
+    },
+    "demo-user": {
+        "id": "demo-user",
+        "name": "Demo Benutzer",
+        "email": "demo@linkbuilder.pro",
+        "company": "LinkBuilder GmbH",
+        "phone": "+49 123 456789",
+        "password": "demo123",
+        "created_at": "2025-07-09 00:15:06"
+    },
+    "686e3ceeb96bc9.16662141": {
+        "id": "686e3ceeb96bc9.16662141",
+        "username": "Marcel",
+        "email": "m.w@seogoal.de",
+        "password": "$2y$10$lqLZP4Plcb8HGQugx6kS2eukjOFXMX8deT6bXrm1kgj.kZJlsfuXi",
+        "role": "user",
+        "status": "active",
+        "first_name": "Marcel",
+        "last_name": "M.",
+        "created_at": "2025-07-09 09:57:02",
+        "last_login": "2025-07-09 10:11:11",
+        "avatar": null,
+        "updated_at": "2025-07-09 10:11:00",
+        "name": "Marcel",
+        "company": "",
+        "phone": "030",
+        "reset_token": null,
+        "reset_expires": null
+    }
+}
