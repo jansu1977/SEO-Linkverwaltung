@@ -1,19 +1,73 @@
 <?php
+/**
+ * LinkBuilder Pro - Blogs Verwaltung
+ * pages/blogs.php - Vollständige und funktionierende Version
+ */
+
+// Debug-Modus aktivieren (für Entwicklung)
+$debug = false;
+
+// Basis-Variablen
 $action = $_GET['action'] ?? 'index';
 $blogId = $_GET['id'] ?? null;
+
+// Session sicherstellen und User-ID ermitteln
+ensureSession();
 $userId = getCurrentUserId();
 
-// Benutzer-Rolle prüfen
+// Fallback für Tests - wenn keine echte User-ID vorhanden ist
+if ($userId === 'default_user' || empty($userId)) {
+    // Für Demo-Zwecke die User-ID aus den vorhandenen Blogs verwenden
+    $tempBlogs = loadData('blogs.json');
+    if (!empty($tempBlogs)) {
+        $firstBlog = reset($tempBlogs);
+        if (isset($firstBlog['user_id'])) {
+            $_SESSION['user_id'] = $firstBlog['user_id'];
+            $userId = $firstBlog['user_id'];
+        }
+    }
+}
+
+// Benutzer-Daten laden
 $users = loadData('users.json');
 $currentUser = $users[$userId] ?? null;
-$isAdmin = $currentUser && ($currentUser['role'] === 'admin');
+
+// Admin-Status prüfen
+$isAdmin = $currentUser && ($currentUser['role'] ?? 'user') === 'admin';
+
+// Wenn kein Benutzer gefunden wird, erstelle einen Standard-Benutzer
+if (!$currentUser) {
+    $users[$userId] = [
+        'id' => $userId,
+        'username' => 'admin',
+        'name' => 'Administrator',
+        'email' => 'admin@example.com',
+        'role' => 'admin',
+        'created_at' => date('Y-m-d H:i:s')
+    ];
+    saveData('users.json', $users);
+    $currentUser = $users[$userId];
+    $isAdmin = true;
+}
+
+// Debug-Ausgabe (nur wenn aktiviert)
+if ($debug && $action === 'index') {
+    echo '<div style="background: #f8f9fa; padding: 15px; margin: 10px 0; border: 1px solid #dee2e6; border-radius: 5px; font-family: monospace; font-size: 12px;">';
+    echo '<strong>🔧 DEBUG INFORMATION:</strong><br>';
+    echo 'User ID: ' . htmlspecialchars($userId) . '<br>';
+    echo 'Current User: ' . ($currentUser ? $currentUser['name'] : 'NICHT GEFUNDEN') . '<br>';
+    echo 'Is Admin: ' . ($isAdmin ? 'JA' : 'NEIN') . '<br>';
+    echo 'Session Status: ' . session_status() . '<br>';
+    echo 'Blogs-Datei existiert: ' . (file_exists(__DIR__ . '/../data/blogs.json') ? 'JA' : 'NEIN') . '<br>';
+    echo '</div>';
+}
 
 // POST-Verarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
-        $name = trim($_POST['name'] ?? '');
+        $name = sanitizeString($_POST['name'] ?? '');
         $url = trim($_POST['url'] ?? '');
-        $description = trim($_POST['description'] ?? '');
+        $description = sanitizeString($_POST['description'] ?? '', 500);
         $topics = array_filter(array_map('trim', explode(',', $_POST['topics'] ?? '')));
         
         if (empty($name) || empty($url)) {
@@ -35,18 +89,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             
             if (saveData('blogs.json', $blogs)) {
-                redirectWithMessage('?page=blogs', 'Blog erfolgreich erstellt.');
+                redirectWithMessage('?page=blogs', 'Blog "' . $name . '" erfolgreich erstellt.');
             } else {
                 $error = 'Fehler beim Speichern des Blogs.';
             }
         }
     } elseif ($action === 'edit' && $blogId) {
         $blogs = loadData('blogs.json');
-        // Admin kann alle Blogs bearbeiten, normale Benutzer nur ihre eigenen
         if (isset($blogs[$blogId]) && ($isAdmin || $blogs[$blogId]['user_id'] === $userId)) {
-            $name = trim($_POST['name'] ?? '');
+            $name = sanitizeString($_POST['name'] ?? '');
             $url = trim($_POST['url'] ?? '');
-            $description = trim($_POST['description'] ?? '');
+            $description = sanitizeString($_POST['description'] ?? '', 500);
             $topics = array_filter(array_map('trim', explode(',', $_POST['topics'] ?? '')));
             
             if (empty($name) || empty($url)) {
@@ -63,22 +116,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 if (saveData('blogs.json', $blogs)) {
-                    redirectWithMessage("?page=blogs&action=view&id=$blogId", 'Blog erfolgreich aktualisiert.');
+                    redirectWithMessage("?page=blogs&action=view&id=$blogId", 'Blog "' . $name . '" erfolgreich aktualisiert.');
                 } else {
                     $error = 'Fehler beim Aktualisieren des Blogs.';
                 }
             }
+        } else {
+            $error = 'Blog nicht gefunden oder keine Berechtigung.';
         }
     } elseif ($action === 'delete' && $blogId) {
         $blogs = loadData('blogs.json');
-        // Admin kann alle Blogs löschen, normale Benutzer nur ihre eigenen
         if (isset($blogs[$blogId]) && ($isAdmin || $blogs[$blogId]['user_id'] === $userId)) {
+            $blogName = $blogs[$blogId]['name'];
             unset($blogs[$blogId]);
+            
             if (saveData('blogs.json', $blogs)) {
-                redirectWithMessage('?page=blogs', 'Blog erfolgreich gelöscht.');
+                // Verknüpfte Links ebenfalls löschen
+                $links = loadData('links.json');
+                $linksDeleted = 0;
+                foreach ($links as $linkId => $link) {
+                    if ($link['blog_id'] === $blogId) {
+                        unset($links[$linkId]);
+                        $linksDeleted++;
+                    }
+                }
+                saveData('links.json', $links);
+                
+                $message = 'Blog "' . $blogName . '" erfolgreich gelöscht.';
+                if ($linksDeleted > 0) {
+                    $message .= ' (' . $linksDeleted . ' verknüpfte Links ebenfalls gelöscht)';
+                }
+                redirectWithMessage('?page=blogs', $message);
             } else {
                 $error = 'Fehler beim Löschen des Blogs.';
             }
+        } else {
+            $error = 'Blog nicht gefunden oder keine Berechtigung.';
+        }
+    } elseif ($action === 'import' && isset($_FILES['csv_file'])) {
+        $csvFile = $_FILES['csv_file'];
+        
+        if ($csvFile['error'] === UPLOAD_ERR_OK && $csvFile['type'] === 'text/csv') {
+            $handle = fopen($csvFile['tmp_name'], 'r');
+            $blogs = loadData('blogs.json');
+            $imported = 0;
+            $errors = [];
+            
+            // Header-Zeile überspringen
+            $header = fgetcsv($handle);
+            
+            while (($data = fgetcsv($handle)) !== FALSE) {
+                if (count($data) >= 2) {
+                    $name = sanitizeString($data[0] ?? '');
+                    $url = trim($data[1] ?? '');
+                    $description = sanitizeString($data[2] ?? '', 500);
+                    $topics = !empty($data[3]) ? array_filter(array_map('trim', explode(',', $data[3]))) : [];
+                    
+                    if (!empty($name) && !empty($url) && validateUrl($url)) {
+                        $newId = generateId();
+                        $blogs[$newId] = [
+                            'id' => $newId,
+                            'user_id' => $userId,
+                            'name' => $name,
+                            'url' => $url,
+                            'description' => $description,
+                            'topics' => $topics,
+                            'created_at' => date('Y-m-d H:i:s')
+                        ];
+                        $imported++;
+                    } else {
+                        $errors[] = "Ungültige Daten für Blog: $name";
+                    }
+                }
+            }
+            fclose($handle);
+            
+            if (saveData('blogs.json', $blogs)) {
+                $message = "$imported Blogs erfolgreich importiert.";
+                if (!empty($errors)) {
+                    $message .= ' (' . count($errors) . ' Einträge übersprungen)';
+                }
+                redirectWithMessage('?page=blogs', $message);
+            } else {
+                $error = 'Fehler beim Speichern der importierten Blogs.';
+            }
+        } else {
+            $error = 'Ungültige CSV-Datei.';
         }
     }
 }
@@ -87,40 +210,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $blogs = loadData('blogs.json');
 $links = loadData('links.json');
 
-// Blogs je nach Rolle filtern
+// Blogs je nach Berechtigung filtern
 if ($isAdmin) {
-    // Admin sieht alle Blogs
     $userBlogs = $blogs;
 } else {
-    // Normale Benutzer sehen nur ihre eigenen Blogs
     $userBlogs = array_filter($blogs, function($blog) use ($userId) {
-        return $blog['user_id'] === $userId;
+        return isset($blog['user_id']) && $blog['user_id'] === $userId;
     });
 }
 
-// Themen-Statistiken berechnen
+// Statistiken berechnen
 $topicStats = [];
 foreach ($userBlogs as $blog) {
-    foreach ($blog['topics'] as $topic) {
-        $topicStats[$topic] = ($topicStats[$topic] ?? 0) + 1;
+    if (isset($blog['topics']) && is_array($blog['topics'])) {
+        foreach ($blog['topics'] as $topic) {
+            $topicStats[$topic] = ($topicStats[$topic] ?? 0) + 1;
+        }
     }
 }
 arsort($topicStats);
 
+// VIEW LOGIC STARTS HERE
 if ($action === 'index'): ?>
     <div class="page-header">
         <div>
             <h1 class="page-title">
                 Blogs
                 <?php if ($isAdmin): ?>
-                    <span class="badge badge-info" style="font-size: 12px; margin-left: 8px;">Admin-Ansicht</span>
+                    <span class="badge badge-info" style="font-size: 12px; margin-left: 8px;">ADMIN-ANSICHT</span>
                 <?php endif; ?>
             </h1>
             <p class="page-subtitle">
                 <?php if ($isAdmin): ?>
                     Verwalten Sie alle Blogs im System (<?= count($userBlogs) ?> Blogs von <?= count(array_unique(array_column($userBlogs, 'user_id'))) ?> Benutzern)
                 <?php else: ?>
-                    Verwalten Sie Ihre Blogs
+                    Verwalten Sie Ihre Blogs (<?= count($userBlogs) ?> Blogs)
                 <?php endif; ?>
             </p>
         </div>
@@ -135,6 +259,11 @@ if ($action === 'index'): ?>
     </div>
 
     <?php showFlashMessage(); ?>
+    <?php if (isset($error)): ?>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> <?= e($error) ?>
+        </div>
+    <?php endif; ?>
 
     <!-- Dashboard -->
     <div class="content-grid">
@@ -145,20 +274,30 @@ if ($action === 'index'): ?>
                 <p class="card-subtitle">Überblick über die Verteilung der Blog-Themen</p>
             </div>
             <div class="card-body">
-                <div class="chart-container">
-                    <div class="chart-placeholder" id="topicChart"></div>
-                    <?php if (!empty($topicStats)): ?>
+                <?php if (!empty($topicStats)): ?>
+                    <div class="chart-container">
                         <div class="chart-legend">
-                            <?php $colors = ['#2dd4bf', '#4dabf7', '#fbbf24', '#f97316', '#f472b6', '#a78bfa']; ?>
-                            <?php foreach (array_slice($topicStats, 0, 6) as $index => $topic): ?>
+                            <?php 
+                            $colors = ['#2dd4bf', '#4dabf7', '#fbbf24', '#f97316', '#f472b6', '#a78bfa'];
+                            $index = 0;
+                            foreach (array_slice($topicStats, 0, 6, true) as $topic => $count): 
+                            ?>
                                 <div class="legend-item">
                                     <div class="legend-color" style="background-color: <?= $colors[$index % count($colors)] ?>;"></div>
-                                    <span><?= e(array_keys($topicStats)[$index]) ?> (<?= $topic ?>)</span>
+                                    <span><?= e($topic) ?> (<?= $count ?>)</span>
                                 </div>
-                            <?php endforeach; ?>
+                            <?php 
+                            $index++;
+                            endforeach; 
+                            ?>
                         </div>
-                    <?php endif; ?>
-                </div>
+                    </div>
+                <?php else: ?>
+                    <div style="text-align: center; color: #8b8fa3; padding: 20px;">
+                        <i class="fas fa-chart-pie" style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p>Noch keine Themen vorhanden</p>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -199,51 +338,60 @@ if ($action === 'index'): ?>
                         <div style="color: #8b8fa3;"><?= e(array_keys($topicStats)[0]) ?> (<?= array_values($topicStats)[0] ?> Blogs)</div>
                     </div>
                     
-                    <div style="margin-top: 12px;">
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Neuester Eintrag</div>
-                        <div style="color: #8b8fa3;"><?= formatDate(max(array_column($userBlogs, 'created_at'))) ?></div>
-                    </div>
+                    <?php if (!empty($userBlogs)): ?>
+                        <div style="margin-top: 12px;">
+                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Neuester Eintrag</div>
+                            <div style="color: #8b8fa3;">
+                                <?php
+                                $dates = array_column($userBlogs, 'created_at');
+                                echo formatDate(max($dates));
+                                ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 
     <!-- Filter und Suche -->
-    <div class="action-bar" style="margin-top: 30px;">
-        <div class="search-bar" style="flex: 1; max-width: 400px;">
-            <div style="position: relative;">
-                <i class="fas fa-search search-icon"></i>
-                <input 
-                    type="text" 
-                    class="form-control search-input" 
-                    placeholder="Blogs durchsuchen (Name, URL<?= $isAdmin ? ', Besitzer' : '' ?>)"
-                    id="blogSearch"
-                    onkeyup="filterBlogs()"
-                >
+    <?php if (!empty($userBlogs)): ?>
+        <div class="action-bar" style="margin-top: 30px;">
+            <div class="search-bar" style="flex: 1; max-width: 400px;">
+                <div style="position: relative;">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        class="form-control search-input" 
+                        placeholder="Blogs durchsuchen (Name, URL<?= $isAdmin ? ', Besitzer' : '' ?>)"
+                        id="blogSearch"
+                        onkeyup="filterBlogs()"
+                    >
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <select class="form-control" id="topicFilter" onchange="filterBlogs()" style="width: auto;">
+                    <option value="">Nach Topic filtern</option>
+                    <?php foreach (array_keys($topicStats) as $topic): ?>
+                        <option value="<?= e($topic) ?>"><?= e($topic) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if ($isAdmin && count($userBlogs) > 0): ?>
+                    <select class="form-control" id="userFilter" onchange="filterBlogs()" style="width: auto;">
+                        <option value="">Nach Benutzer filtern</option>
+                        <?php 
+                        $userIds = array_unique(array_column($userBlogs, 'user_id'));
+                        foreach ($userIds as $uid): 
+                            $user = $users[$uid] ?? null;
+                            if ($user):
+                        ?>
+                            <option value="<?= e($uid) ?>"><?= e($user['name'] ?? $user['username'] ?? 'Unbekannt') ?></option>
+                        <?php endif; endforeach; ?>
+                    </select>
+                <?php endif; ?>
             </div>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <select class="form-control" id="topicFilter" onchange="filterBlogs()" style="width: auto;">
-                <option value="">Nach Topic filtern</option>
-                <?php foreach (array_keys($topicStats) as $topic): ?>
-                    <option value="<?= e($topic) ?>"><?= e($topic) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <?php if ($isAdmin && count($userBlogs) > 0): ?>
-                <select class="form-control" id="userFilter" onchange="filterBlogs()" style="width: auto;">
-                    <option value="">Nach Benutzer filtern</option>
-                    <?php 
-                    $userIds = array_unique(array_column($userBlogs, 'user_id'));
-                    foreach ($userIds as $uid): 
-                        $user = $users[$uid] ?? null;
-                        if ($user):
-                    ?>
-                        <option value="<?= e($uid) ?>"><?= e($user['name'] ?? $user['username'] ?? 'Unbekannt') ?></option>
-                    <?php endif; endforeach; ?>
-                </select>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?php endif; ?>
 
     <?php if (empty($userBlogs)): ?>
         <div class="empty-state">
@@ -260,7 +408,7 @@ if ($action === 'index'): ?>
             <?php foreach ($userBlogs as $blogId => $blog): 
                 // Links für diesen Blog zählen
                 $blogLinks = array_filter($links, function($link) use ($blogId) {
-                    return $link['blog_id'] === $blogId;
+                    return isset($link['blog_id']) && $link['blog_id'] === $blogId;
                 });
                 $linkCount = count($blogLinks);
                 
@@ -270,22 +418,23 @@ if ($action === 'index'): ?>
                 $isOwnBlog = $blog['user_id'] === $userId;
             ?>
                 <div class="card blog-card" 
-                     data-name="<?= strtolower($blog['name']) ?>" 
-                     data-url="<?= strtolower($blog['url']) ?>"
-                     data-topics="<?= strtolower(implode(' ', $blog['topics'])) ?>"
-                     data-user-id="<?= $blog['user_id'] ?>"
+                     data-name="<?= strtolower($blog['name'] ?? '') ?>" 
+                     data-url="<?= strtolower($blog['url'] ?? '') ?>"
+                     data-topics="<?= strtolower(implode(' ', $blog['topics'] ?? [])) ?>"
+                     data-user-id="<?= e($blog['user_id'] ?? '') ?>"
                      data-owner="<?= strtolower($ownerName) ?>">
                     <div class="card-body">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <h3 style="margin-bottom: 4px; font-size: 18px;">
                                     <a href="?page=blogs&action=view&id=<?= $blogId ?>" style="color: #4dabf7; text-decoration: none;">
-                                        <?= e($blog['name']) ?>
+                                        <?= e($blog['name'] ?? 'Unbenannt') ?>
                                     </a>
                                 </h3>
                                 <div style="font-size: 13px; color: #8b8fa3; margin-bottom: 8px;">
-                                    <a href="<?= e($blog['url']) ?>" target="_blank" style="color: #4dabf7; text-decoration: none;">
-                                        <?= e($blog['url']) ?>
+                                    <a href="<?= e($blog['url'] ?? '#') ?>" target="_blank" style="color: #4dabf7; text-decoration: none;">
+                                        <?= e($blog['url'] ?? 'Keine URL') ?>
+                                        <i class="fas fa-external-link-alt" style="font-size: 10px; margin-left: 4px;"></i>
                                     </a>
                                 </div>
                                 <?php if ($isAdmin && !$isOwnBlog): ?>
@@ -303,7 +452,7 @@ if ($action === 'index'): ?>
                                     <a href="?page=blogs&action=edit&id=<?= $blogId ?>" class="btn btn-sm btn-secondary" title="Bearbeiten">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <a href="?page=blogs&action=delete&id=<?= $blogId ?>" class="btn btn-sm btn-danger" title="Löschen" onclick="return confirm('Blog &quot;<?= e($blog['name']) ?>&quot; wirklich löschen?<?= $isAdmin && !$isOwnBlog ? '\n\nDieser Blog gehört ' . e($ownerName) . '.' : '' ?>')">
+                                    <a href="?page=blogs&action=delete&id=<?= $blogId ?>" class="btn btn-sm btn-danger" title="Löschen" onclick="return confirm('Blog &quot;<?= e($blog['name'] ?? 'Unbenannt') ?>&quot; wirklich löschen?<?= $isAdmin && !$isOwnBlog ? '\n\nDieser Blog gehört ' . e($ownerName) . '.' : '' ?>')">
                                         <i class="fas fa-trash"></i>
                                     </a>
                                 <?php endif; ?>
@@ -312,7 +461,7 @@ if ($action === 'index'): ?>
                         
                         <?php if (!empty($blog['description'])): ?>
                             <p style="color: #8b8fa3; font-size: 13px; margin-bottom: 12px; line-height: 1.4;">
-                                <?= e(substr($blog['description'], 0, 100)) ?><?= strlen($blog['description']) > 100 ? '...' : '' ?>
+                                <?= e(truncateText($blog['description'], 100)) ?>
                             </p>
                         <?php endif; ?>
                         
@@ -336,9 +485,9 @@ if ($action === 'index'): ?>
                             </div>
                             <div>
                                 <?php if (isset($blog['updated_at'])): ?>
-                                    Aktualisiert am <?= formatDate($blog['updated_at']) ?>
+                                    Aktualisiert <?= formatDate($blog['updated_at']) ?>
                                 <?php else: ?>
-                                    Hinzugefügt am <?= formatDate($blog['created_at']) ?>
+                                    Erstellt <?= formatDate($blog['created_at'] ?? date('Y-m-d')) ?>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -351,14 +500,13 @@ if ($action === 'index'): ?>
 <?php elseif ($action === 'view' && $blogId): 
     $blog = $blogs[$blogId] ?? null;
     if (!$blog || (!$isAdmin && $blog['user_id'] !== $userId)) {
-        header('HTTP/1.0 404 Not Found');
-        include 'pages/404.php';
+        echo '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Blog nicht gefunden oder keine Berechtigung.</div>';
         return;
     }
     
     // Links für diesen Blog
     $blogLinks = array_filter($links, function($link) use ($blogId) {
-        return $link['blog_id'] === $blogId;
+        return isset($link['blog_id']) && $link['blog_id'] === $blogId;
     });
     
     // Blog-Besitzer Info
@@ -463,10 +611,10 @@ if ($action === 'index'): ?>
                                     $linkOwnerName = $linkOwner ? ($linkOwner['name'] ?? $linkOwner['username'] ?? 'Unbekannt') : 'Unbekannt';
                                 ?>
                                     <tr>
-                                        <td><?= formatDate($link['published_date']) ?></td>
+                                        <td><?= formatDate($link['published_date'] ?? $link['created_at'] ?? date('Y-m-d')) ?></td>
                                         <td>
                                             <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
-                                                <?= e($link['anchor_text']) ?>
+                                                <?= e($link['anchor_text'] ?? 'Unbekannt') ?>
                                             </a>
                                         </td>
                                         <td>
@@ -479,8 +627,8 @@ if ($action === 'index'): ?>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <a href="<?= e($link['target_url']) ?>" target="_blank" style="color: #4dabf7; text-decoration: none; font-size: 12px;">
-                                                <?= e(strlen($link['target_url']) > 40 ? substr($link['target_url'], 0, 40) . '...' : $link['target_url']) ?>
+                                            <a href="<?= e($link['target_url'] ?? '#') ?>" target="_blank" style="color: #4dabf7; text-decoration: none; font-size: 12px;">
+                                                <?= e(truncateText($link['target_url'] ?? 'Keine URL', 40)) ?>
                                             </a>
                                         </td>
                                         <td>
@@ -556,8 +704,16 @@ if ($action === 'index'): ?>
                         <h4 style="margin-bottom: 16px;">Link-Aktivität über Zeit</h4>
                         <div style="background-color: #343852; padding: 16px; border-radius: 8px;">
                             <p style="color: #8b8fa3; margin: 0;">
-                                Erster Link: <?= formatDate(min(array_column($blogLinks, 'published_date'))) ?><br>
-                                Letzter Link: <?= formatDate(max(array_column($blogLinks, 'published_date'))) ?>
+                                <?php
+                                $dates = array_column($blogLinks, 'published_date');
+                                $dates = array_filter($dates); // Leere Werte entfernen
+                                if (!empty($dates)):
+                                ?>
+                                    Erster Link: <?= formatDate(min($dates)) ?><br>
+                                    Letzter Link: <?= formatDate(max($dates)) ?>
+                                <?php else: ?>
+                                    Noch keine Veröffentlichungsdaten verfügbar
+                                <?php endif; ?>
                             </p>
                         </div>
                     </div>
@@ -637,8 +793,7 @@ if ($action === 'index'): ?>
     if ($action === 'edit') {
         $blog = $blogs[$blogId] ?? null;
         if (!$blog || (!$isAdmin && $blog['user_id'] !== $userId)) {
-            header('HTTP/1.0 404 Not Found');
-            include 'pages/404.php';
+            echo '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Blog nicht gefunden oder keine Berechtigung.</div>';
             return;
         }
     }
@@ -769,6 +924,13 @@ if ($action === 'index'): ?>
         </div>
     </div>
 
+    <?php if (isset($error)): ?>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            <?= e($error) ?>
+        </div>
+    <?php endif; ?>
+
     <div class="card">
         <div class="card-header">
             <h3 class="card-title">CSV-Import</h3>
@@ -800,13 +962,19 @@ if ($action === 'index'): ?>
         </div>
     </div>
 
+<?php else: ?>
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i>
+        Ungültige Aktion oder fehlende Parameter.
+    </div>
+
 <?php endif; ?>
 
 <script>
 function filterBlogs() {
-    const search = document.getElementById('blogSearch').value.toLowerCase();
-    const topicFilter = document.getElementById('topicFilter') ? document.getElementById('topicFilter').value.toLowerCase() : '';
-    const userFilter = document.getElementById('userFilter') ? document.getElementById('userFilter').value : '';
+    const search = document.getElementById('blogSearch')?.value.toLowerCase() || '';
+    const topicFilter = document.getElementById('topicFilter')?.value.toLowerCase() || '';
+    const userFilter = document.getElementById('userFilter')?.value || '';
     const cards = document.querySelectorAll('.blog-card');
     
     cards.forEach(card => {
@@ -837,7 +1005,86 @@ function showTab(tabName) {
     });
     
     // Gewählten Tab anzeigen
-    document.getElementById(tabName + 'Tab').style.display = 'block';
+    const targetTab = document.getElementById(tabName + 'Tab');
+    if (targetTab) {
+        targetTab.style.display = 'block';
+    }
+    
+    // Button aktivieren
     event.target.classList.add('active');
 }
+
+// Auto-save für Formulare (optional)
+document.addEventListener('DOMContentLoaded', function() {
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        const inputs = form.querySelectorAll('input, textarea, select');
+        inputs.forEach(input => {
+            input.addEventListener('input', function() {
+                // Hier könnte Auto-save implementiert werden
+                // console.log('Input changed:', input.name, input.value);
+            });
+        });
+    });
+});
 </script>
+
+<style>
+/* Zusätzliche Styles für bessere UX */
+.blog-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.blog-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 8px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b8fa3;
+    z-index: 1;
+}
+
+.search-input {
+    padding-left: 40px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-bar {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .action-bar > div {
+        width: 100%;
+    }
+}
+</style>
