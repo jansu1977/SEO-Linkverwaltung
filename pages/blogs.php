@@ -45,9 +45,45 @@ if (!$currentUser) {
         'role' => 'admin',
         'created_at' => date('Y-m-d H:i:s')
     ];
+    
+    // Zusätzlichen Test-Benutzer erstellen (für Filter-Demo)
+    $testUserId = '686e3ceeb96bc9.16662141';
+    $users[$testUserId] = [
+        'id' => $testUserId,
+        'username' => 'marcel',
+        'name' => 'Marcel',
+        'email' => 'marcel@example.com',
+        'role' => 'user',
+        'created_at' => date('Y-m-d H:i:s')
+    ];
+    
     saveData('users.json', $users);
     $currentUser = $users[$userId];
     $isAdmin = true;
+    
+    // Test-Blog für Marcel erstellen (falls noch nicht vorhanden)
+    $blogs = loadData('blogs.json');
+    $marcelBlogExists = false;
+    foreach ($blogs as $blog) {
+        if (isset($blog['user_id']) && $blog['user_id'] === $testUserId) {
+            $marcelBlogExists = true;
+            break;
+        }
+    }
+    
+    if (!$marcelBlogExists) {
+        $newBlogId = generateId();
+        $blogs[$newBlogId] = [
+            'id' => $newBlogId,
+            'user_id' => $testUserId,
+            'name' => 'themenspeicher.com',
+            'url' => 'https://www.themenspeicher.com/',
+            'description' => 'Blog über verschiedene Themen und Spezialisierungen',
+            'topics' => ['SEO'],
+            'created_at' => date('Y-m-d H:i:s')
+        ];
+        saveData('blogs.json', $blogs);
+    }
 }
 
 // Debug-Ausgabe (nur wenn aktiviert)
@@ -356,6 +392,14 @@ if ($action === 'index'): ?>
 
     <!-- Filter und Suche -->
     <?php if (!empty($userBlogs)): ?>
+        <!-- Debug-Bereich (nur wenn Debug aktiv) -->
+        <?php if ($debug): ?>
+            <div id="debugOutput" style="background: #1a1d2e; border: 1px solid #4dabf7; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace; font-size: 12px; color: #4dabf7;">
+                <strong>🔍 Filter-Debug:</strong>
+                <div id="debugContent">Wählen Sie einen Filter aus...</div>
+            </div>
+        <?php endif; ?>
+        
         <div class="action-bar" style="margin-top: 30px;">
             <div class="search-bar" style="flex: 1; min-width: 280px; max-width: 400px;">
                 <div style="position: relative;">
@@ -971,15 +1015,31 @@ if ($action === 'index'): ?>
 <?php endif; ?>
 
 <script>
+function debugLog(message) {
+    // Console-Log
+    console.log(message);
+    
+    // Sichtbarer Debug-Bereich
+    const debugDiv = document.getElementById('debugContent');
+    if (debugDiv) {
+        const timestamp = new Date().toLocaleTimeString();
+        debugDiv.innerHTML += `<br>[${timestamp}] ${message}`;
+        
+        // Scroll zum Ende
+        debugDiv.scrollTop = debugDiv.scrollHeight;
+    }
+}
+
 function filterBlogs() {
     const search = document.getElementById('blogSearch')?.value.toLowerCase() || '';
     const topicFilter = document.getElementById('topicFilter')?.value.toLowerCase() || '';
     const userFilter = document.getElementById('userFilter')?.value || '';
     const cards = document.querySelectorAll('.blog-card');
     
-    console.log('Filter aktiv:', { search, topicFilter, userFilter }); // Debug
+    debugLog(`🔍 Filter gestartet: Search="${search}", Topic="${topicFilter}", User="${userFilter}"`);
     
     let visibleCount = 0;
+    let totalCards = cards.length;
     
     cards.forEach((card, index) => {
         const name = card.dataset.name || '';
@@ -988,23 +1048,21 @@ function filterBlogs() {
         const userId = card.dataset.userId || '';
         const owner = card.dataset.owner || '';
         
-        // Debug für ersten Card
-        if (index === 0) {
-            console.log('Erste Karte Daten:', {
-                name, url, topics, userId, owner
-            });
+        // Debug für erste Karte oder wenn User-Filter aktiv
+        if (index === 0 || userFilter) {
+            debugLog(`📋 Karte ${index}: name="${name}", userId="${userId}", owner="${owner}"`);
         }
         
         const searchMatch = !search || name.includes(search) || url.includes(search) || owner.includes(search);
         const topicMatch = !topicFilter || topics.includes(topicFilter);
         const userMatch = !userFilter || userId === userFilter;
         
-        const matches = searchMatch && topicMatch && userMatch;
-        
         // Debug für User-Filter
         if (userFilter) {
-            console.log(`Karte ${index}: userId="${userId}", userFilter="${userFilter}", match=${userMatch}`);
+            debugLog(`🔍 User-Match Karte ${index}: "${userId}" === "${userFilter}" = ${userMatch}`);
         }
+        
+        const matches = searchMatch && topicMatch && userMatch;
         
         if (matches) {
             card.style.display = 'block';
@@ -1014,7 +1072,7 @@ function filterBlogs() {
         }
     });
     
-    console.log(`${visibleCount} von ${cards.length} Karten sichtbar`);
+    debugLog(`✅ Ergebnis: ${visibleCount} von ${totalCards} Karten sichtbar`);
 }
 
 function showTab(tabName) {
@@ -1040,26 +1098,49 @@ function showTab(tabName) {
     }
 }
 
-// Auto-save für Formulare (optional)
+// Initialisierung beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        const inputs = form.querySelectorAll('input, textarea, select');
-        inputs.forEach(input => {
-            input.addEventListener('input', function() {
-                // Hier könnte Auto-save implementiert werden
-                // console.log('Input changed:', input.name, input.value);
-            });
-        });
-    });
+    debugLog('🚀 Seite geladen, initialisiere Filter...');
     
-    // Debug: User-Filter Optionen anzeigen
+    // User-Filter Optionen anzeigen
     const userFilter = document.getElementById('userFilter');
     if (userFilter) {
-        console.log('User-Filter Optionen:');
+        debugLog('👥 User-Filter Optionen gefunden:');
         Array.from(userFilter.options).forEach((option, index) => {
-            console.log(`${index}: value="${option.value}", text="${option.text}"`);
+            if (option.value) { // Nur echte Optionen, nicht den Platzhalter
+                debugLog(`   ${index}: value="${option.value}", text="${option.text}"`);
+            }
         });
+    } else {
+        debugLog('❌ User-Filter nicht gefunden (nicht Admin oder keine Blogs)');
+    }
+    
+    // Blog-Karten analysieren
+    const cards = document.querySelectorAll('.blog-card');
+    debugLog(`📊 ${cards.length} Blog-Karten gefunden`);
+    
+    cards.forEach((card, index) => {
+        if (index < 3) { // Nur erste 3 zur Übersicht
+            debugLog(`   Karte ${index}: userId="${card.dataset.userId}", owner="${card.dataset.owner}"`);
+        }
+    });
+    
+    // Test-Button hinzufügen (nur im Debug-Modus)
+    const debugDiv = document.getElementById('debugOutput');
+    if (debugDiv) {
+        const testButton = document.createElement('button');
+        testButton.innerHTML = '🧪 Test User-Filter';
+        testButton.style.cssText = 'margin-top: 10px; padding: 5px 10px; background: #4dabf7; color: white; border: none; border-radius: 3px; cursor: pointer;';
+        testButton.onclick = function() {
+            const userFilter = document.getElementById('userFilter');
+            if (userFilter && userFilter.options.length > 1) {
+                userFilter.selectedIndex = 1; // Ersten echten User auswählen
+                filterBlogs();
+            } else {
+                debugLog('❌ Keine User-Filter Optionen verfügbar');
+            }
+        };
+        debugDiv.appendChild(testButton);
     }
 });
 </script>
