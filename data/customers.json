@@ -27,13 +27,13 @@
                 "url": "https:\/\/fortfuehrungsprognose24.de\/",
                 "title": "fortfuehrungsprognose24.de",
                 "description": "Fortführungsprognose 24",
-                "added_at": "2025-07-08 22:21:33"
+                "added_at": "2025-07-10 21:33:41"
             },
             {
                 "url": "https:\/\/gmbh-probleme24.de\/",
                 "title": "gmbh-probleme24.de",
                 "description": "Gmbh-probleme24",
-                "added_at": "2025-07-08 22:21:33"
+                "added_at": "2025-07-10 21:33:41"
             }
         ],
         "phone": "",
@@ -44,7 +44,8 @@
         "country": "Deutschland",
         "notes": "Keine",
         "status": "aktiv",
-        "created_at": "2025-07-08 22:21:33"
+        "created_at": "2025-07-08 22:21:33",
+        "updated_at": "2025-07-10 21:33:41"
     },
     "686e40af6c9654.39627628": {
         "id": "686e40af6c9654.39627628",

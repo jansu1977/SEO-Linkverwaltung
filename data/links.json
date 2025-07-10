@@ -1,26 +1,421 @@
 {
-    "686d96271e8479.09243643": {
-        "id": "686d96271e8479.09243643",
+    "686ee85d1ce863.68822986": {
+        "id": "686ee85d1ce863.68822986",
         "user_id": "686d96270d1403.01155465",
-        "customer_id": "686d96271dafc2.33875838",
-        "blog_id": "686d96271e7c14.50908174",
-        "anchor_text": "Innovative Lösungen",
-        "target_url": "https:\/\/musterfirma.de\/loesungen",
-        "published_date": "2025-07-08",
+        "customer_id": "686d99ed8717f7.36294098",
+        "customer_website_url": "https:\/\/fortfuehrungsprognose24.de\/",
+        "blog_id": "686e5627151774.42248376",
+        "backlink_url": "https:\/\/volksinfos.de\/die-wende-vor-der-insolvenz\/",
+        "anchor_text": "https:\/\/fortfuehrungsprognose24.de\/",
+        "target_url": "https:\/\/fortfuehrungsprognose24.de\/",
+        "published_date": "2025-07-09",
+        "expiry_date": "",
+        "description": "",
         "status": "aktiv",
-        "notes": "Link in Tech-Artikel platziert",
-        "created_at": "2025-07-08 22:05:27"
+        "created_at": "2025-07-09 22:08:29",
+        "last_checked": "2025-07-10 22:05:47",
+        "check_result": {
+            "isValid": true,
+            "containsTargetLink": true,
+            "httpStatus": 200,
+            "error": null,
+            "debug": [
+                "=== ERWEITERTE BACKLINK-PRÜFUNG GESTARTET ===",
+                "Backlink-URL: https:\/\/volksinfos.de\/die-wende-vor-der-insolvenz\/",
+                "Ziel-URL: https:\/\/fortfuehrungsprognose24.de\/",
+                "Ankertext: 'https:\/\/fortfuehrungsprognose24.de\/'",
+                "Timestamp: 2025-07-10 22:05:42",
+                "Domain: volksinfos.de",
+                "\n--- SCHRITT 1: HTTP-ERREICHBARKEIT PRÜFEN ---",
+                "Prüfe HTTP-Status für: https:\/\/volksinfos.de\/die-wende-vor-der-insolvenz\/",
+                "User-Agent: Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/605.1.15 (KHTML, like Gecko) Version\/17.1 Safari\/605.1.15",
+                "HTTP-Status: 200",
+                "✅ HTTP-Status OK",
+                "\n--- SCHRITT 2: HTML-CONTENT LADEN ---",
+                "Versuche Strategie: Standard Browser Headers",
+                "✅ Strategie 'Standard Browser Headers' erfolgreich",
+                "Content-Länge: 25,337 Zeichen",
+                "HTML erfolgreich geladen: 25,337 Zeichen",
+                "\n--- SCHRITT 3: LINK-ANALYSE ---",
+                "Normalisierte Ziel-URL: https:\/\/fortfuehrungsprognose24.de",
+                "Normalisierter Ankertext: 'https:\/\/fortfuehrungsprognose24.de\/'",
+                "URL-Varianten (4): https:\/\/fortfuehrungsprognose24.de, https:\/\/fortfuehrungsprognose24.de\/, http:\/\/fortfuehrungsprognose24.de...",
+                "Ankertext-Varianten (2): https:\/\/fortfuehrungsprognose24.de\/, fortfuehrungsprognose24.de...",
+                "Pattern 1: 35 Matches",
+                "Pattern 2: 35 Matches",
+                "Gefundene Links: 64",
+                "Matching-Ergebnisse: URL-Matches=2, Text-Matches=2, Perfekte-Matches=2",
+                "\n=== PRÜFUNG ABGESCHLOSSEN ===",
+                "Verarbeitungszeit: 5950.02ms",
+                "Response-Größe: 25,337 Zeichen",
+                "Endergebnis: LINK GEFUNDEN"
+            ],
+            "foundLinks": [
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/essen-trinken\/",
+                    "text": "Essen &#038; Trinken",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/essen-trinken",
+                    "normalizedText": "essen &#038; trinken"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/gesundheit-wellness\/",
+                    "text": "Gesundheit &#038; Wellness",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/gesundheit-wellness",
+                    "normalizedText": "gesundheit &#038; wellness"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/haus-garten\/",
+                    "text": "Haus &#038; Garten",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/haus-garten",
+                    "normalizedText": "haus &#038; garten"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/wohnen-dekorieren\/",
+                    "text": "Wohnen &#038; Dekorieren",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/wohnen-dekorieren",
+                    "normalizedText": "wohnen &#038; dekorieren"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/sport-freizeit\/",
+                    "text": "Sport &#038; Freizeit",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/sport-freizeit",
+                    "normalizedText": "sport &#038; freizeit"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/technik-elektronik\/",
+                    "text": "Technik &#038; Elektronik",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/technik-elektronik",
+                    "normalizedText": "technik &#038; elektronik"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/allgemein\/",
+                    "text": "News",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/allgemein",
+                    "normalizedText": "news"
+                },
+                {
+                    "href": "https:\/\/fortfuehrungsprognose24.de\/",
+                    "text": "https:\/\/fortfuehrungsprognose24.de\/",
+                    "normalizedHref": "https:\/\/fortfuehrungsprognose24.de",
+                    "normalizedText": "https:\/\/fortfuehrungsprognose24.de\/"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/musik-ist-ein-teil-vom-leben\/",
+                    "text": "VorherigerMusik ist ein Teil vom Leben",
+                    "normalizedHref": "https:\/\/volksinfos.de\/musik-ist-ein-teil-vom-leben",
+                    "normalizedText": "vorherigermusik ist ein teil vom leben"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/ideen-zum-thema-coupons\/",
+                    "text": "NächsterIdeen zum Thema Coupons",
+                    "normalizedHref": "https:\/\/volksinfos.de\/ideen-zum-thema-coupons",
+                    "normalizedText": "nächsterideen zum thema coupons"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/sicherheit-und-datenschutz-bei-virtuellen-adressen\/",
+                    "text": "Sicherheit und Datenschutz bei virtuellen Adressen",
+                    "normalizedHref": "https:\/\/volksinfos.de\/sicherheit-und-datenschutz-bei-virtuellen-adressen",
+                    "normalizedText": "sicherheit und datenschutz bei virtuellen adressen"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/sicherheit-und-datenschutz-bei-virtuellen-adressen\/",
+                    "text": "[...]",
+                    "normalizedHref": "https:\/\/volksinfos.de\/sicherheit-und-datenschutz-bei-virtuellen-adressen",
+                    "normalizedText": "[...]"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/was-bedeutet-eine-virtuelle-adresse\/",
+                    "text": "Was bedeutet eine virtuelle Adresse?",
+                    "normalizedHref": "https:\/\/volksinfos.de\/was-bedeutet-eine-virtuelle-adresse",
+                    "normalizedText": "was bedeutet eine virtuelle adresse?"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/premium-geschaftsadresse-in-berlin-6-vorteile\/",
+                    "text": "Premium Geschäftsadresse Mieten Berlin &#8211; 6 Vorteile Für Ihr Unternehmen",
+                    "normalizedHref": "https:\/\/volksinfos.de\/premium-geschaftsadresse-in-berlin-6-vorteile",
+                    "normalizedText": "premium geschäftsadresse mieten berlin &#8211; 6 vorteile für ihr unternehmen"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/einfacher-berufseinstieg-kosmetikschulen-in-berlin\/",
+                    "text": "Berufseinstieg Leicht Gemacht &#8211; Kosmetikschulen In Berlin Im Überblick",
+                    "normalizedHref": "https:\/\/volksinfos.de\/einfacher-berufseinstieg-kosmetikschulen-in-berlin",
+                    "normalizedText": "berufseinstieg leicht gemacht &#8211; kosmetikschulen in berlin im Überblick"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/leitstellenstuhl-vorteile\/",
+                    "text": "Leitstellenstuhl Vorteile",
+                    "normalizedHref": "https:\/\/volksinfos.de\/leitstellenstuhl-vorteile",
+                    "normalizedText": "leitstellenstuhl vorteile"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/allgemein\/",
+                    "text": "Allgemein",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/allgemein",
+                    "normalizedText": "allgemein"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/business\/",
+                    "text": "Business",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/business",
+                    "normalizedText": "business"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/default\/",
+                    "text": "Default",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/default",
+                    "normalizedText": "default"
+                },
+                {
+                    "href": "https:\/\/volksinfos.de\/category\/essen-trinken\/",
+                    "text": "Essen &amp; Trinken",
+                    "normalizedHref": "https:\/\/volksinfos.de\/category\/essen-trinken",
+                    "normalizedText": "essen &amp; trinken"
+                }
+            ],
+            "responseTime": 5950.02,
+            "responseSize": 25337,
+            "searchedFor": {
+                "targetUrl": "https:\/\/fortfuehrungsprognose24.de\/",
+                "anchorText": "https:\/\/fortfuehrungsprognose24.de\/",
+                "normalizedUrl": "https:\/\/fortfuehrungsprognose24.de",
+                "normalizedText": "https:\/\/fortfuehrungsprognose24.de\/",
+                "urlVariants": {
+                    "0": "https:\/\/fortfuehrungsprognose24.de",
+                    "1": "https:\/\/fortfuehrungsprognose24.de\/",
+                    "3": "http:\/\/fortfuehrungsprognose24.de",
+                    "5": "https:\/\/www.fortfuehrungsprognose24.de"
+                },
+                "anchorVariants": {
+                    "0": "https:\/\/fortfuehrungsprognose24.de\/",
+                    "3": "fortfuehrungsprognose24.de"
+                }
+            },
+            "statistics": {
+                "totalLinks": 20,
+                "urlMatches": 2,
+                "textMatches": 2,
+                "perfectMatches": 2
+            }
+        },
+        "debug_info": {
+            "http_status": 200,
+            "url_erreichbar": "Ja",
+            "link_gefunden": "Ja",
+            "perfect_matches": 2,
+            "url_matches": 2,
+            "text_matches": 2,
+            "total_links_found": 20,
+            "response_time": 5950.02,
+            "response_size": 25337
+        },
+        "updated_at": "2025-07-10 22:17:21",
+        "customer_website_id": "0"
     },
-    "686d96271e84a1.50881844": {
-        "id": "686d96271e84a1.50881844",
+    "686fbb3bd0c932.35670820": {
+        "id": "686fbb3bd0c932.35670820",
         "user_id": "686d96270d1403.01155465",
-        "customer_id": "686d96271db017.28476789",
-        "blog_id": "686d96271e7c74.54454598",
-        "anchor_text": "Marketing Strategien",
-        "target_url": "https:\/\/beispiel-ag.de\/marketing",
-        "published_date": "2025-07-08",
-        "status": "ausstehend",
-        "notes": "Wartet auf Freigabe",
-        "created_at": "2025-07-08 22:05:27"
+        "customer_id": "686d99ed8717f7.36294098",
+        "blog_id": "686d96271e7c14.50908174",
+        "backlink_url": "https:\/\/unternehmen.focus.de\/kosmetikschule-berlin.html",
+        "anchor_text": "www.vital-kosmetikakademie.de",
+        "target_url": "https:\/\/vital-kosmetikakademie.de",
+        "description": "",
+        "status": "aktiv",
+        "created_at": "2025-07-10 13:08:11",
+        "last_checked": "2025-07-10 13:11:03",
+        "check_result": {
+            "isValid": true,
+            "containsTargetLink": true,
+            "httpStatus": 200,
+            "error": null,
+            "debug": [
+                "=== ERWEITERTE BACKLINK-PRÜFUNG GESTARTET ===",
+                "Backlink-URL: https:\/\/unternehmen.focus.de\/kosmetikschule-berlin.html",
+                "Ziel-URL: https:\/\/vital-kosmetikakademie.de",
+                "Ankertext: 'www.vital-kosmetikakademie.de'",
+                "Timestamp: 2025-07-10 13:10:47",
+                "Domain: unternehmen.focus.de",
+                "\n--- SCHRITT 1: HTTP-ERREICHBARKEIT PRÜFEN ---",
+                "Prüfe HTTP-Status für: https:\/\/unternehmen.focus.de\/kosmetikschule-berlin.html",
+                "User-Agent: Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/605.1.15 (KHTML, like Gecko) Version\/17.1 Safari\/605.1.15",
+                "HTTP-Status: 200",
+                "✅ HTTP-Status OK",
+                "\n--- SCHRITT 2: HTML-CONTENT LADEN ---",
+                "Versuche Strategie: Standard Browser Headers",
+                "✅ Strategie 'Standard Browser Headers' erfolgreich",
+                "Content-Länge: 89,666 Zeichen",
+                "HTML erfolgreich geladen: 89,666 Zeichen",
+                "\n--- SCHRITT 3: LINK-ANALYSE ---",
+                "Normalisierte Ziel-URL: https:\/\/vital-kosmetikakademie.de",
+                "Normalisierter Ankertext: 'www.vital-kosmetikakademie.de'",
+                "URL-Varianten (4): https:\/\/vital-kosmetikakademie.de, https:\/\/vital-kosmetikakademie.de\/, http:\/\/vital-kosmetikakademie.de...",
+                "Ankertext-Varianten (1): www.vital-kosmetikakademie.de...",
+                "Pattern 1: 82 Matches",
+                "Pattern 2: 82 Matches",
+                "Gefundene Links: 154",
+                "Matching-Ergebnisse: URL-Matches=6, Text-Matches=2, Perfekte-Matches=2",
+                "\n=== PRÜFUNG ABGESCHLOSSEN ===",
+                "Verarbeitungszeit: 16102.21ms",
+                "Response-Größe: 89,666 Zeichen",
+                "Endergebnis: LINK GEFUNDEN"
+            ],
+            "foundLinks": [
+                {
+                    "href": "https:\/\/www.focus.de\/politik\/",
+                    "text": "Politik",
+                    "normalizedHref": "https:\/\/www.focus.de\/politik",
+                    "normalizedText": "politik"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/finanzen\/",
+                    "text": "Finanzen",
+                    "normalizedHref": "https:\/\/www.focus.de\/finanzen",
+                    "normalizedText": "finanzen"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/perspektiven\/",
+                    "text": "Perspektiven",
+                    "normalizedHref": "https:\/\/www.focus.de\/perspektiven",
+                    "normalizedText": "perspektiven"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/wissen\/",
+                    "text": "Wissen",
+                    "normalizedHref": "https:\/\/www.focus.de\/wissen",
+                    "normalizedText": "wissen"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/gesundheit\/",
+                    "text": "Gesundheit",
+                    "normalizedHref": "https:\/\/www.focus.de\/gesundheit",
+                    "normalizedText": "gesundheit"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/kultur\/",
+                    "text": "Kultur",
+                    "normalizedHref": "https:\/\/www.focus.de\/kultur",
+                    "normalizedText": "kultur"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/panorama\/",
+                    "text": "Panorama",
+                    "normalizedHref": "https:\/\/www.focus.de\/panorama",
+                    "normalizedText": "panorama"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/sport\/",
+                    "text": "Sport",
+                    "normalizedHref": "https:\/\/www.focus.de\/sport",
+                    "normalizedText": "sport"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/digital\/",
+                    "text": "Digital",
+                    "normalizedHref": "https:\/\/www.focus.de\/digital",
+                    "normalizedText": "digital"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/reisen\/",
+                    "text": "Reisen",
+                    "normalizedHref": "https:\/\/www.focus.de\/reisen",
+                    "normalizedText": "reisen"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/auto\/",
+                    "text": "Auto",
+                    "normalizedHref": "https:\/\/www.focus.de\/auto",
+                    "normalizedText": "auto"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/immobilien\/",
+                    "text": "Immobilien",
+                    "normalizedHref": "https:\/\/www.focus.de\/immobilien",
+                    "normalizedText": "immobilien"
+                },
+                {
+                    "href": "https:\/\/www.focus.de\/videos\/",
+                    "text": "Video",
+                    "normalizedHref": "https:\/\/www.focus.de\/videos",
+                    "normalizedText": "video"
+                },
+                {
+                    "href": "https:\/\/gutscheine.focus.de\/",
+                    "text": "Gutscheine",
+                    "normalizedHref": "https:\/\/gutscheine.focus.de",
+                    "normalizedText": "gutscheine"
+                },
+                {
+                    "href": "\/\/unternehmen.focus.de\/",
+                    "text": "Unternehmen - FOCUS.de",
+                    "normalizedHref": "\/\/unternehmen.focus.de",
+                    "normalizedText": "unternehmen - focus.de"
+                },
+                {
+                    "href": "\/\/unternehmen.focus.de\/wellness-beauty",
+                    "text": "Wellness & Beauty",
+                    "normalizedHref": "\/\/unternehmen.focus.de\/wellness-beauty",
+                    "normalizedText": "wellness & beauty"
+                },
+                {
+                    "href": "#article-sidebar-imprint",
+                    "text": "(Mehr Infos)",
+                    "normalizedHref": "#article-sidebar-imprint",
+                    "normalizedText": "(mehr infos)"
+                },
+                {
+                    "href": "https:\/\/www.vital-kosmetikakademie.de\/index.php",
+                    "text": "Kosmetikschule in Berlin",
+                    "normalizedHref": "https:\/\/www.vital-kosmetikakademie.de\/index.php",
+                    "normalizedText": "kosmetikschule in berlin"
+                },
+                {
+                    "href": "https:\/\/www.vital-kosmetikakademie.de\/ausbildung-executiv-beauty.php",
+                    "text": "Kosmetikmanager",
+                    "normalizedHref": "https:\/\/www.vital-kosmetikakademie.de\/ausbildung-executiv-beauty.php",
+                    "normalizedText": "kosmetikmanager"
+                },
+                {
+                    "href": "http:\/\/www.vital-kosmetikakademie.de\/blog\/?p=367",
+                    "text": "Wahl der richtigen Kosmetikschule",
+                    "normalizedHref": "http:\/\/www.vital-kosmetikakademie.de\/blog\/?p=367",
+                    "normalizedText": "wahl der richtigen kosmetikschule"
+                }
+            ],
+            "responseTime": 16102.21,
+            "responseSize": 89666,
+            "searchedFor": {
+                "targetUrl": "https:\/\/vital-kosmetikakademie.de",
+                "anchorText": "www.vital-kosmetikakademie.de",
+                "normalizedUrl": "https:\/\/vital-kosmetikakademie.de",
+                "normalizedText": "www.vital-kosmetikakademie.de",
+                "urlVariants": {
+                    "0": "https:\/\/vital-kosmetikakademie.de",
+                    "1": "https:\/\/vital-kosmetikakademie.de\/",
+                    "3": "http:\/\/vital-kosmetikakademie.de",
+                    "5": "https:\/\/www.vital-kosmetikakademie.de"
+                },
+                "anchorVariants": [
+                    "www.vital-kosmetikakademie.de"
+                ]
+            },
+            "statistics": {
+                "totalLinks": 20,
+                "urlMatches": 6,
+                "textMatches": 2,
+                "perfectMatches": 2
+            }
+        },
+        "debug_info": {
+            "http_status": 200,
+            "url_erreichbar": "Ja",
+            "link_gefunden": "Ja",
+            "perfect_matches": 2,
+            "url_matches": 6,
+            "text_matches": 2,
+            "total_links_found": 20,
+            "response_time": 16102.21,
+            "response_size": 89666
+        },
+        "updated_at": "2025-07-10 13:10:43"
     }
 }

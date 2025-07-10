@@ -1,7 +1,7 @@
 <?php
 /**
- * LinkBuilder Pro - Link-Verwaltung (Robuste Version)
- * pages/links.php - Implementiert moderne Best Practices für Website-Scraping
+ * LinkBuilder Pro - Link-Verwaltung (Erweiterte Version mit Website-Auswahl)
+ * pages/links.php - Implementiert Website-Auswahl für Kunden mit mehreren Domains
  */
 
 // Output Buffering starten um Header-Probleme zu vermeiden
@@ -140,7 +140,7 @@ class RobustBacklinkChecker {
             'http' => [
                 'method' => 'HEAD',
                 'header' => $this->getBrowserHeaders($userAgent),
-                'timeout' => 5,  // Reduziert: 15s → 5s
+                'timeout' => 5,
                 'ignore_errors' => true
             ]
         ]);
@@ -168,7 +168,6 @@ class RobustBacklinkChecker {
      * HTML-Content laden mit Fallback-Strategien (SCHNELLE VERSION)
      */
     private function loadHtmlContent($url, &$debug) {
-        // Nur 2 Strategien statt 4 für Geschwindigkeit
         $strategies = [
             'browser' => 'Standard Browser Headers',
             'googlebot' => 'Googlebot User-Agent'
@@ -184,16 +183,12 @@ class RobustBacklinkChecker {
                 $debug[] = "✅ Strategie '$description' erfolgreich";
                 $debug[] = "Content-Länge: " . number_format(strlen($content)) . " Zeichen";
                 
-                // Vereinfachte Content-Validierung für Geschwindigkeit
                 if (strlen($content) > 100) {
                     return ['success' => true, 'content' => $content, 'strategy' => $strategy];
                 }
             } else {
                 $debug[] = "❌ Strategie '$description' fehlgeschlagen";
             }
-            
-            // KEINE Pause zwischen Versuchen für Geschwindigkeit
-            // usleep(500000); // ENTFERNT
         }
         
         return ['success' => false, 'error' => 'Konnte HTML-Content nicht laden', 'httpStatus' => 0];
@@ -206,9 +201,9 @@ class RobustBacklinkChecker {
         $baseOptions = [
             'http' => [
                 'method' => 'GET',
-                'timeout' => 8,  // Reduziert: 20s → 8s
+                'timeout' => 8,
                 'follow_location' => true,
-                'max_redirects' => 3,  // Reduziert: 5 → 3
+                'max_redirects' => 3,
                 'ignore_errors' => true
             ]
         ];
@@ -266,7 +261,7 @@ class RobustBacklinkChecker {
         
         return [
             'containsTargetLink' => $matchResults['containsTargetLink'],
-            'foundLinks' => array_slice($foundLinks, 0, 20), // Limitiere auf 20 für Performance
+            'foundLinks' => array_slice($foundLinks, 0, 20),
             'normalizedTargetUrl' => $normalizedTargetUrl,
             'normalizedAnchorText' => $normalizedAnchorText,
             'urlVariants' => $urlVariants,
@@ -324,7 +319,6 @@ class RobustBacklinkChecker {
     private function generateUrlVariants($originalUrl, $normalizedUrl) {
         $variants = [$normalizedUrl];
         
-        // Nur die wichtigsten Varianten für Geschwindigkeit
         $variants[] = $normalizedUrl . '/';
         $variants[] = rtrim($normalizedUrl, '/');
         
@@ -345,7 +339,6 @@ class RobustBacklinkChecker {
     private function generateAnchorVariants($originalAnchor, $normalizedAnchor) {
         $variants = [$normalizedAnchor];
         
-        // Nur die wichtigsten Varianten
         $variants[] = html_entity_decode($normalizedAnchor, ENT_QUOTES, 'UTF-8');
         $variants[] = preg_replace('/\s+/', ' ', $normalizedAnchor);
         
@@ -423,7 +416,7 @@ class RobustBacklinkChecker {
             "User-Agent: $userAgent",
             'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language: de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding: identity', // Keine Kompression für einfacheres Debugging
+            'Accept-Encoding: identity',
             'DNT: 1',
             'Connection: keep-alive',
             'Upgrade-Insecure-Requests: 1',
@@ -453,40 +446,18 @@ class RobustBacklinkChecker {
     }
     
     /**
-     * HTML-Content validieren (SCHNELLE VERSION - vereinfacht)
-     */
-    private function isValidHtmlContent($content, &$debug) {
-        // Vereinfachte Validierung für Geschwindigkeit
-        
-        // Zu kurzer Content
-        if (strlen($content) < 100) {
-            $debug[] = "⚠️ Content zu kurz (< 100 Zeichen)";
-            return false;
-        }
-        
-        // Schnelle HTML-Check (nur die wichtigsten Tags)
-        if (!preg_match('/<(html|body|div|p|a)/i', $content)) {
-            $debug[] = "⚠️ Content enthält keine HTML-Tags";
-            return false;
-        }
-        
-        return true;
-    }
-    
-    /**
      * Rate-Limiting prüfen
      */
     private function checkRateLimit($domain) {
         $key = "rate_limit_$domain";
         $now = time();
-        $windowSize = 60; // 1 Minute
-        $maxRequests = 10; // 10 Requests pro Minute
+        $windowSize = 60;
+        $maxRequests = 10;
         
         if (!isset($this->rateLimitStorage[$key])) {
             $this->rateLimitStorage[$key] = [];
         }
         
-        // Alte Einträge entfernen
         $this->rateLimitStorage[$key] = array_filter(
             $this->rateLimitStorage[$key],
             function($timestamp) use ($now, $windowSize) {
@@ -494,12 +465,10 @@ class RobustBacklinkChecker {
             }
         );
         
-        // Prüfen ob Limit erreicht
         if (count($this->rateLimitStorage[$key]) >= $maxRequests) {
             return false;
         }
         
-        // Request registrieren
         $this->rateLimitStorage[$key][] = $now;
         return true;
     }
@@ -515,15 +484,14 @@ class RobustBacklinkChecker {
             $this->circuitBreakerStorage[$key] = [
                 'failures' => 0,
                 'lastFailure' => 0,
-                'state' => 'closed' // closed, open, half-open
+                'state' => 'closed'
             ];
         }
         
         $cb = &$this->circuitBreakerStorage[$key];
         
-        // Circuit-Breaker-Logik
         if ($cb['state'] === 'open') {
-            $timeout = 300; // 5 Minuten
+            $timeout = 300;
             if ($now - $cb['lastFailure'] > $timeout) {
                 $cb['state'] = 'half-open';
                 return true;
@@ -588,7 +556,7 @@ class RobustBacklinkChecker {
 }
 
 try {
-    // Basis-Variablen - Action kann aus GET oder POST kommen
+    // Basis-Variablen
     $action = $_POST['action'] ?? $_GET['action'] ?? 'index';
     $linkId = $_POST['id'] ?? $_GET['id'] ?? null;
 
@@ -612,6 +580,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'create') {
             $customerId = $_POST['customer_id'] ?? '';
+            $customerWebsiteId = $_POST['customer_website_id'] ?? ''; // NEU: Spezifische Website
             $blogId = $_POST['blog_id'] ?? '';
             $backlinkUrl = trim($_POST['backlink_url'] ?? '');
             $anchorText = trim($_POST['anchor_text'] ?? '');
@@ -642,6 +611,7 @@ try {
                     'id' => $newId,
                     'user_id' => $userId,
                     'customer_id' => $customerId,
+                    'customer_website_id' => $customerWebsiteId, // NEU: Website-ID speichern
                     'blog_id' => $blogId,
                     'backlink_url' => $backlinkUrl,
                     'anchor_text' => $anchorText,
@@ -662,6 +632,7 @@ try {
         } elseif ($action === 'update' && $linkId) {
             // Link aktualisieren
             $customerId = $_POST['customer_id'] ?? '';
+            $customerWebsiteId = $_POST['customer_website_id'] ?? ''; // NEU: Spezifische Website
             $blogId = $_POST['blog_id'] ?? '';
             $backlinkUrl = trim($_POST['backlink_url'] ?? '');
             $anchorText = trim($_POST['anchor_text'] ?? '');
@@ -687,8 +658,9 @@ try {
             if (empty($errors)) {
                 $links = loadData('links.json');
                 if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
-                    // Link aktualisieren (ID und Erstellungszeit beibehalten)
+                    // Link aktualisieren
                     $links[$linkId]['customer_id'] = $customerId;
+                    $links[$linkId]['customer_website_id'] = $customerWebsiteId; // NEU: Website-ID aktualisieren
                     $links[$linkId]['blog_id'] = $blogId;
                     $links[$linkId]['backlink_url'] = $backlinkUrl;
                     $links[$linkId]['anchor_text'] = $anchorText;
@@ -712,7 +684,6 @@ try {
                 $link = $links[$linkId];
                 $anchorText = $link['anchor_text'] ?? 'Unbekannter Link';
                 
-                // Link aus Array entfernen
                 unset($links[$linkId]);
                 
                 if (saveData('links.json', $links)) {
@@ -726,32 +697,27 @@ try {
                 redirectWithMessage('?page=links', 'Link nicht gefunden oder keine Berechtigung.');
             }
         } elseif ($action === 'check' && $linkId) {
-            // Einzelnen Link prüfen - GLEICHE LOGIK WIE DEBUG-ANALYSE
+            // Einzelnen Link prüfen
             $links = loadData('links.json');
             if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
                 $link = $links[$linkId];
                 
-                // Exakt gleiche Prüfung wie in der Debug-Analyse
                 $result = $backlinkChecker->checkBacklinkAdvanced(
                     $link['backlink_url'],
                     $link['target_url'],
                     $link['anchor_text']
                 );
                 
-                // Status-Bestimmung - EXAKT WIE IN DEBUG-ANALYSE
-                $newStatus = 'defekt'; // Standard: defekt
+                // Status-Bestimmung
+                $newStatus = 'defekt';
                 
-                // Wenn URL erreichbar UND Link gefunden = AKTIV
                 if ($result['isValid'] && $result['containsTargetLink']) {
                     $newStatus = 'aktiv';
-                } 
-                // Wenn URL erreichbar aber Link NICHT gefunden = AUSSTEHEND  
-                elseif ($result['isValid'] && !$result['containsTargetLink']) {
+                } elseif ($result['isValid'] && !$result['containsTargetLink']) {
                     $newStatus = 'ausstehend';
                 }
-                // Wenn URL NICHT erreichbar = DEFEKT (bereits als Standard gesetzt)
                 
-                // Debug-Informationen für Transparenz
+                // Debug-Informationen
                 $debugInfo = [
                     'http_status' => $result['httpStatus'] ?? 0,
                     'url_erreichbar' => $result['isValid'] ? 'Ja' : 'Nein',
@@ -771,7 +737,6 @@ try {
                 $links[$linkId]['debug_info'] = $debugInfo;
                 
                 if (saveData('links.json', $links)) {
-                    // Detaillierte Erfolgsmeldung mit Debug-Infos
                     $message = "Link-Prüfung abgeschlossen: Status = <strong>" . strtoupper($newStatus) . "</strong>";
                     $message .= "<br>→ HTTP: {$debugInfo['http_status']} | Erreichbar: {$debugInfo['url_erreichbar']} | Link gefunden: {$debugInfo['link_gefunden']}";
                     $message .= "<br>→ Perfekte Matches: {$debugInfo['perfect_matches']} | Gefundene Links: {$debugInfo['total_links_found']}";
@@ -796,14 +761,13 @@ try {
         if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
             $link = $links[$linkId];
             
-            // Robuste Debug-Analyse durchführen
             $result = $backlinkChecker->checkBacklinkAdvanced(
                 $link['backlink_url'],
                 $link['target_url'],
                 $link['anchor_text']
             );
             
-            // Vollständige Debug-Seite ausgeben
+            // Debug-Seite ausgeben
             ?>
             <!DOCTYPE html>
             <html lang="de">
@@ -1000,11 +964,16 @@ try {
     }
 
     // =============================================================================
-    // DATEN LADEN
+    // DATEN LADEN UND VALIDIEREN
     // =============================================================================
     $links = loadData('links.json');
     $customers = loadData('customers.json');
     $blogs = loadData('blogs.json');
+
+    // Sicherstellen dass Arrays existieren
+    if (!is_array($links)) $links = [];
+    if (!is_array($customers)) $customers = [];
+    if (!is_array($blogs)) $blogs = [];
 
     // Links je nach Berechtigung filtern
     if ($isAdmin) {
@@ -1027,6 +996,37 @@ try {
             $status = $link['status'] ?? 'ausstehend';
             $statusStats[$status] = ($statusStats[$status] ?? 0) + 1;
         }
+    }
+
+    // =============================================================================
+    // HILFSFUNKTION: Website-Info aus Link laden
+    // =============================================================================
+    function getCustomerWebsiteInfo($link, $customers) {
+        $customerId = $link['customer_id'] ?? '';
+        $websiteId = $link['customer_website_id'] ?? '';
+        
+        if (!isset($customers[$customerId])) {
+            return null;
+        }
+        
+        $customer = $customers[$customerId];
+        
+        // Neue Struktur mit websites-Array
+        if (!empty($customer['websites']) && is_array($customer['websites'])) {
+            if (isset($customer['websites'][$websiteId])) {
+                return $customer['websites'][$websiteId];
+            }
+        }
+        // Backward compatibility: Alte einzelne Website
+        elseif (!empty($customer['website'])) {
+            return [
+                'url' => $customer['website'],
+                'title' => parse_url($customer['website'], PHP_URL_HOST),
+                'description' => ''
+            ];
+        }
+        
+        return null;
     }
 
     // =============================================================================
@@ -1157,7 +1157,7 @@ try {
                             <thead>
                                 <tr>
                                     <th>Ankertext</th>
-                                    <th>Kunde</th>
+                                    <th>Kunde / Website</th>
                                     <th>Blog</th>
                                     <th>Status</th>
                                     <th>Letzte Prüfung</th>
@@ -1169,27 +1169,9 @@ try {
                                 <?php foreach ($userLinks as $linkId => $link): 
                                     $customer = $customers[$link['customer_id']] ?? null;
                                     $blog = $blogs[$link['blog_id']] ?? null;
+                                    $websiteInfo = getCustomerWebsiteInfo($link, $customers);
                                 ?>
                                     <tr>
-                                        <td>
-                                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 4px;">
-                                                <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
-                                                    <?= htmlspecialchars($link['anchor_text'] ?? 'Unbekannt') ?>
-                                                </a>
-                                            </div>
-                                            <div style="font-size: 11px; color: #8b8fa3;">
-                                                <?= htmlspecialchars(substr($link['backlink_url'] ?? '', 0, 50)) ?>...
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <?php if ($customer): ?>
-                                                <a href="?page=customers&action=view&id=<?= $link['customer_id'] ?>" style="color: #4dabf7; text-decoration: none;">
-                                                    <?= htmlspecialchars($customer['name']) ?>
-                                                </a>
-                                            <?php else: ?>
-                                                <span style="color: #8b8fa3;">-</span>
-                                            <?php endif; ?>
-                                        </td>
                                         <td>
                                             <?php if ($blog): ?>
                                                 <a href="?page=blogs&action=view&id=<?= $link['blog_id'] ?>" style="color: #4dabf7; text-decoration: none;">
@@ -1273,6 +1255,7 @@ try {
         
         $customer = $customers[$link['customer_id']] ?? null;
         $blog = $blogs[$link['blog_id']] ?? null;
+        $websiteInfo = getCustomerWebsiteInfo($link, $customers);
     ?>
         <div class="breadcrumb">
             <a href="?page=links">Zurück zu Links</a>
@@ -1286,6 +1269,11 @@ try {
                 <p class="page-subtitle">
                     Von <strong><?= $customer ? htmlspecialchars($customer['name']) : 'Unbekannter Kunde' ?></strong> 
                     zu <strong><?= $blog ? htmlspecialchars($blog['name']) : 'Unbekannter Blog' ?></strong>
+                    <?php if ($websiteInfo): ?>
+                        <br><small style="color: #8b8fa3;">
+                            🌐 Für Website: <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
+                        </small>
+                    <?php endif; ?>
                 </p>
             </div>
             <div class="action-buttons">
@@ -1344,6 +1332,22 @@ try {
                                 </a>
                             </div>
                         </div>
+                        <?php if ($websiteInfo): ?>
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">KUNDEN-WEBSITE</div>
+                            <div style="color: #e2e8f0;">
+                                <a href="<?= htmlspecialchars($websiteInfo['url']) ?>" target="_blank" style="color: #4dabf7; word-break: break-all;">
+                                    🌐 <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
+                                    <i class="fas fa-external-link-alt" style="margin-left: 4px; font-size: 12px;"></i>
+                                </a>
+                                <?php if (!empty($websiteInfo['description'])): ?>
+                                    <div style="font-size: 12px; color: #8b8fa3; margin-top: 4px;">
+                                        <?= htmlspecialchars($websiteInfo['description']) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <div>
                         <div style="margin-bottom: 16px;">
@@ -1499,14 +1503,14 @@ try {
                 <h3 class="card-title">Link-Formular</h3>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="linkForm">
                     <input type="hidden" name="action" value="update">
                     <input type="hidden" name="id" value="<?= htmlspecialchars($linkId) ?>">
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
                         <div>
                             <label class="form-label">Kunde *</label>
-                            <select name="customer_id" class="form-control" required>
+                            <select name="customer_id" class="form-control" required id="customerSelect" onchange="loadCustomerWebsites()">
                                 <option value="">Kunde auswählen</option>
                                 <?php foreach ($customers as $customerId => $customer): ?>
                                     <?php if ($isAdmin || $customer['user_id'] === $userId): ?>
@@ -1532,6 +1536,17 @@ try {
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                    </div>
+
+                    <!-- NEU: Website-Auswahl für Kunde -->
+                    <div id="websiteSelectionContainer" style="margin-bottom: 20px; display: none;">
+                        <label class="form-label">Kunden-Website (Optional)</label>
+                        <select name="customer_website_id" class="form-control" id="customerWebsiteSelect">
+                            <option value="">Keine spezifische Website</option>
+                        </select>
+                        <small style="color: #8b8fa3; font-size: 12px; display: block; margin-top: 4px;">
+                            Wählen Sie die spezifische Website des Kunden für die dieser Link erstellt wird
+                        </small>
                     </div>
 
                     <div style="margin-bottom: 20px;">
@@ -1574,6 +1589,16 @@ try {
             </div>
         </div>
 
+        <script>
+        // Website-Auswahl beim Edit-Mode laden
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentWebsiteId = '<?= htmlspecialchars($link['customer_website_id'] ?? '') ?>';
+            if (document.getElementById('customerSelect').value) {
+                loadCustomerWebsites(currentWebsiteId);
+            }
+        });
+        </script>
+
     <?php elseif ($action === 'create'): ?>
         <div class="breadcrumb">
             <a href="?page=links">Zurück zu Links</a>
@@ -1604,15 +1629,16 @@ try {
                 <h3 class="card-title">Link-Formular</h3>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="linkForm">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
                         <div>
                             <label class="form-label">Kunde *</label>
-                            <select name="customer_id" class="form-control" required>
+                            <select name="customer_id" class="form-control" required id="customerSelect" onchange="loadCustomerWebsites()">
                                 <option value="">Kunde auswählen</option>
                                 <?php foreach ($customers as $customerId => $customer): ?>
                                     <?php if ($isAdmin || $customer['user_id'] === $userId): ?>
-                                        <option value="<?= htmlspecialchars($customerId) ?>">
+                                        <option value="<?= htmlspecialchars($customerId) ?>" 
+                                                <?= (isset($_POST['customer_id']) && $_POST['customer_id'] === $customerId) ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($customer['name']) ?>
                                         </option>
                                     <?php endif; ?>
@@ -1625,7 +1651,8 @@ try {
                                 <option value="">Blog auswählen</option>
                                 <?php foreach ($blogs as $blogId => $blog): ?>
                                     <?php if ($isAdmin || $blog['user_id'] === $userId): ?>
-                                        <option value="<?= htmlspecialchars($blogId) ?>">
+                                        <option value="<?= htmlspecialchars($blogId) ?>" 
+                                                <?= (isset($_POST['blog_id']) && $_POST['blog_id'] === $blogId) ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($blog['name']) ?>
                                         </option>
                                     <?php endif; ?>
@@ -1634,25 +1661,46 @@ try {
                         </div>
                     </div>
 
+                    <!-- Website-Auswahl für Kunde -->
+                    <div id="websiteSelectionContainer" style="margin-bottom: 20px; display: none;">
+                        <label class="form-label">
+                            <i class="fas fa-globe" style="margin-right: 6px; color: #4dabf7;"></i>
+                            Kunden-Website (Optional)
+                        </label>
+                        <select name="customer_website_id" class="form-control" id="customerWebsiteSelect">
+                            <option value="">Keine spezifische Website</option>
+                        </select>
+                        <small style="color: #8b8fa3; font-size: 12px; display: block; margin-top: 4px;">
+                            📌 Wählen Sie die spezifische Website des Kunden für die dieser Link erstellt wird
+                        </small>
+                    </div>
+
                     <div style="margin-bottom: 20px;">
                         <label class="form-label">Ankertext *</label>
-                        <input type="text" name="anchor_text" class="form-control" placeholder="Der sichtbare Text des Links" required>
+                        <input type="text" name="anchor_text" class="form-control" 
+                               value="<?= htmlspecialchars($_POST['anchor_text'] ?? '') ?>"
+                               placeholder="Der sichtbare Text des Links" required>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
                         <div>
                             <label class="form-label">Ziel-URL *</label>
-                            <input type="url" name="target_url" class="form-control" placeholder="https://example.com/seite" required>
+                            <input type="url" name="target_url" class="form-control" 
+                                   value="<?= htmlspecialchars($_POST['target_url'] ?? '') ?>"
+                                   placeholder="https://example.com/seite" required>
                         </div>
                         <div>
                             <label class="form-label">Backlink-URL *</label>
-                            <input type="url" name="backlink_url" class="form-control" placeholder="https://blog.example.com/artikel" required>
+                            <input type="url" name="backlink_url" class="form-control" 
+                                   value="<?= htmlspecialchars($_POST['backlink_url'] ?? '') ?>"
+                                   placeholder="https://blog.example.com/artikel" required>
                         </div>
                     </div>
 
                     <div style="margin-bottom: 20px;">
                         <label class="form-label">Beschreibung</label>
-                        <textarea name="description" class="form-control" rows="3" placeholder="Zusätzliche Notizen zu diesem Link"></textarea>
+                        <textarea name="description" class="form-control" rows="3" 
+                                  placeholder="Zusätzliche Notizen zu diesem Link"><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
                     </div>
 
                     <div style="display: flex; gap: 12px;">
@@ -1666,6 +1714,15 @@ try {
                 </form>
             </div>
         </div>
+
+        <script>
+        // Website-Auswahl beim Create-Mode laden falls Kunde bereits ausgewählt
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('customerSelect').value) {
+                loadCustomerWebsites();
+            }
+        });
+        </script>
 
     <?php else: ?>
         <div class="alert alert-danger">
@@ -1842,6 +1899,59 @@ try {
         100% { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
+    /* Website Selection Styling */
+    #websiteSelectionContainer {
+        background: #2a2d42;
+        border: 1px solid #4dabf7;
+        border-radius: 8px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #websiteSelectionContainer::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #4dabf7, #06b6d4);
+    }
+
+    #websiteSelectionContainer.visible {
+        animation: slideDown 0.3s ease-out;
+    }
+
+    #websiteSelectionContainer .form-label {
+        color: #4dabf7 !important;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    #customerWebsiteSelect {
+        background-color: #343852 !important;
+        border: 1px solid #4dabf7 !important;
+    }
+
+    #customerWebsiteSelect:focus {
+        border-color: #06b6d4 !important;
+        box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.3) !important;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+            max-height: 0;
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 200px;
+        }
+    }
+
     @media (max-width: 768px) {
         .page-header {
             flex-direction: column;
@@ -1860,8 +1970,185 @@ try {
     </style>
 
     <script>
+    // Globale Funktion für Website-Auswahl
+    async function loadCustomerWebsites(preselectedWebsiteId = null) {
+        console.log('🔄 loadCustomerWebsites called with:', preselectedWebsiteId);
+        
+        const customerSelect = document.getElementById('customerSelect');
+        const websiteContainer = document.getElementById('websiteSelectionContainer');
+        const websiteSelect = document.getElementById('customerWebsiteSelect');
+        
+        if (!customerSelect || !websiteContainer || !websiteSelect) {
+            console.error('❌ Elements not found:', {
+                customerSelect: !!customerSelect,
+                websiteContainer: !!websiteContainer,
+                websiteSelect: !!websiteSelect
+            });
+            return;
+        }
+        
+        const customerId = customerSelect.value;
+        console.log('👤 Customer ID:', customerId);
+        
+        if (!customerId) {
+            console.log('ℹ️ No customer selected, hiding website container');
+            websiteContainer.style.display = 'none';
+            return;
+        }
+        
+        try {
+            // Loading state
+            websiteSelect.innerHTML = '<option value="">🔄 Lade Websites...</option>';
+            websiteSelect.disabled = true;
+            
+            // AJAX-Endpoint URL - separate AJAX-Datei
+            const url = `ajax/get_customer_websites.php?customer_id=${encodeURIComponent(customerId)}&t=${Date.now()}`;
+            
+            console.log('🌐 Fetching from:', url);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+            
+            console.log('📡 Response status:', response.status);
+            console.log('📡 Response content-type:', response.headers.get('content-type'));
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const responseText = await response.text();
+            console.log('📄 Raw response (first 300 chars):', responseText.substring(0, 300));
+            
+            // Prüfen ob Response wirklich JSON ist
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                console.error('❌ Response is not JSON, content-type:', contentType);
+                console.error('❌ Full response:', responseText);
+                throw new Error(`Expected JSON response, got: ${contentType || 'unknown'}`);
+            }
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('❌ JSON Parse Error:', parseError);
+                console.error('❌ Full response text:', responseText);
+                throw new Error('Server returned invalid JSON');
+            }
+            
+            console.log('✅ Parsed data:', data);
+            console.log('🔍 Debug info:', data.debug);
+            
+            // Prüfen ob Request erfolgreich war
+            if (!data.success) {
+                throw new Error(data.error || 'Unknown server error');
+            }
+            
+            // Clear existing options
+            websiteSelect.innerHTML = '<option value="">Keine spezifische Website</option>';
+            
+            if (data.websites && data.websites.length > 0) {
+                console.log(`🌐 Found ${data.websites.length} websites:`, data.websites);
+                
+                // Add website options
+                data.websites.forEach((website, index) => {
+                    const option = document.createElement('option');
+                    option.value = website.id;
+                    option.textContent = `🌐 ${website.title}`;
+                    if (website.description) {
+                        option.textContent += ` - ${website.description}`;
+                    }
+                    
+                    // Preselect website if specified
+                    if (preselectedWebsiteId !== null && website.id == preselectedWebsiteId) {
+                        option.selected = true;
+                        console.log(`✅ Pre-selected website: ${website.title}`);
+                    }
+                    
+                    websiteSelect.appendChild(option);
+                });
+                
+                // Show container with animation
+                websiteContainer.style.display = 'block';
+                websiteContainer.classList.add('visible');
+                
+                // Update label to show count
+                const label = websiteContainer.querySelector('.form-label');
+                if (label) {
+                    label.innerHTML = `<i class="fas fa-globe" style="margin-right: 6px; color: #4dabf7;"></i>Kunden-Website (${data.websites.length} verfügbar)`;
+                }
+                
+                console.log(`✅ Website selection shown with ${data.websites.length} options`);
+            } else {
+                console.log('ℹ️ No websites found for customer');
+                console.log('ℹ️ Debug info:', data.debug);
+                websiteContainer.style.display = 'none';
+                
+                // Show info message für Kunden ohne Websites
+                const label = websiteContainer.querySelector('.form-label');
+                if (label) {
+                    label.innerHTML = `<i class="fas fa-info-circle" style="margin-right: 6px; color: #8b8fa3;"></i>Keine Websites für diesen Kunden`;
+                }
+            }
+            
+            websiteSelect.disabled = false;
+            
+        } catch (error) {
+            console.error('❌ Error loading customer websites:', error);
+            websiteSelect.innerHTML = '<option value="">❌ Fehler beim Laden</option>';
+            websiteSelect.disabled = false;
+            
+            // Show error message
+            const label = websiteContainer.querySelector('.form-label');
+            if (label) {
+                label.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right: 6px; color: #ef4444;"></i>Fehler beim Laden der Websites`;
+            }
+            
+            // Show error details in container
+            websiteContainer.style.display = 'block';
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'background: #2d1b1b; border: 1px solid #ef4444; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 12px; color: #fca5a5;';
+            errorDiv.innerHTML = `
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right: 8px; color: #ef4444;"></i>
+                    <strong>Fehler beim Laden der Websites</strong>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong>Fehlermeldung:</strong> ${error.message}
+                </div>
+                <div style="margin-bottom: 8px; font-size: 11px; color: #d1d5db;">
+                    Prüfen Sie die Browser-Konsole (F12) für weitere Details
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="loadCustomerWebsites()" style="background: #ef4444; border: none; color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                        🔄 Erneut versuchen
+                    </button>
+                    <button onclick="this.parentElement.parentElement.style.display='none'" style="background: #6b7280; border: none; color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                        ✕ Schließen
+                    </button>
+                </div>
+            `;
+            
+            // Remove existing error divs
+            const existingError = websiteContainer.querySelector('.error-message');
+            if (existingError) existingError.remove();
+            
+            errorDiv.className = 'error-message';
+            websiteContainer.appendChild(errorDiv);
+        }
+    }
+
     // Progress Bar für Link-Prüfung
     document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, initializing...');
+        
         // Handler für kleine Buttons in der Tabelle
         document.querySelectorAll('.link-check-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
@@ -1881,6 +2168,13 @@ try {
                 startLinkCheck(form, this, 'detail');
             });
         });
+
+        // Website-Auswahl beim Create-Mode laden falls Kunde bereits ausgewählt
+        const customerSelect = document.getElementById('customerSelect');
+        if (customerSelect && customerSelect.value) {
+            console.log('Auto-loading websites for pre-selected customer:', customerSelect.value);
+            loadCustomerWebsites();
+        }
 
         function startLinkCheck(form, button, type) {
             // Button deaktivieren und Spinner zeigen
@@ -1949,6 +2243,16 @@ try {
             }
         }
     });
+    
+    // Test function für debugging
+    function testWebsiteLoad() {
+        console.log('Testing website load...');
+        const select = document.getElementById('customerSelect');
+        if (select && select.options.length > 1) {
+            select.selectedIndex = 1; // Select first customer
+            loadCustomerWebsites();
+        }
+    }
     </script>
 
 <?php
@@ -1975,3 +2279,29 @@ if (ob_get_level()) {
 }
 
 ?>
+                                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 4px;">
+                                                <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
+                                                    <?= htmlspecialchars($link['anchor_text'] ?? 'Unbekannt') ?>
+                                                </a>
+                                            </div>
+                                            <div style="font-size: 11px; color: #8b8fa3;">
+                                                <?= htmlspecialchars(substr($link['backlink_url'] ?? '', 0, 50)) ?>...
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php if ($customer): ?>
+                                                <div style="margin-bottom: 2px;">
+                                                    <a href="?page=customers&action=view&id=<?= $link['customer_id'] ?>" style="color: #4dabf7; text-decoration: none; font-weight: 600;">
+                                                        <?= htmlspecialchars($customer['name']) ?>
+                                                    </a>
+                                                </div>
+                                                <?php if ($websiteInfo): ?>
+                                                    <div style="font-size: 11px; color: #8b8fa3;">
+                                                        🌐 <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <span style="color: #8b8fa3;">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
