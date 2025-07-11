@@ -7,5 +7,25 @@
         "description": "",
         "created_at": "2025-07-08 23:52:47",
         "usage_count": 0
+    },
+    "6871870db1dfb2.19868275": {
+        "id": "6871870db1dfb2.19868275",
+        "user_id": "686d96270d1403.01155465",
+        "name": "Technologie",
+        "color": "#10b981",
+        "description": "",
+        "created_at": "2025-07-11 21:50:05",
+        "usage_count": 0,
+        "updated_at": "2025-07-11 21:50:24"
+    },
+    "68718cf14384b1.99354540": {
+        "id": "68718cf14384b1.99354540",
+        "user_id": "686d96270d1403.01155465",
+        "name": "Test",
+        "color": "#7c3aed",
+        "description": "",
+        "created_at": "2025-07-11 22:15:13",
+        "usage_count": 0,
+        "updated_at": "2025-07-11 22:17:44"
     }
 }

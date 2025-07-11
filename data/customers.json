@@ -1,21 +1,21 @@
 {
-    "686d96271dafc2.33875838": {
-        "id": "686d96271dafc2.33875838",
-        "user_id": "686d96270d1403.01155465",
-        "name": "Musterfirma GmbH",
-        "email": "kontakt@musterfirma.de",
-        "website": "https:\/\/musterfirma.de",
-        "phone": "+49 123 456789",
-        "created_at": "2025-07-08 22:05:27"
-    },
     "686d96271db017.28476789": {
         "id": "686d96271db017.28476789",
         "user_id": "686d96270d1403.01155465",
-        "name": "Beispiel AG",
+        "name": "Beispiel AG test",
         "email": "info@beispiel-ag.de",
         "website": "https:\/\/beispiel-ag.de",
         "phone": "+49 987 654321",
-        "created_at": "2025-07-08 22:05:27"
+        "created_at": "2025-07-08 22:05:27",
+        "websites": [],
+        "company": "",
+        "address": "",
+        "city": "",
+        "postal_code": "",
+        "country": "",
+        "notes": "",
+        "status": "inaktiv",
+        "updated_at": "2025-07-11 13:26:34"
     },
     "686d99ed8717f7.36294098": {
         "id": "686d99ed8717f7.36294098",
@@ -27,13 +27,13 @@
                 "url": "https:\/\/fortfuehrungsprognose24.de\/",
                 "title": "fortfuehrungsprognose24.de",
                 "description": "Fortführungsprognose 24",
-                "added_at": "2025-07-10 21:33:41"
+                "added_at": "2025-07-11 13:26:04"
             },
             {
                 "url": "https:\/\/gmbh-probleme24.de\/",
                 "title": "gmbh-probleme24.de",
                 "description": "Gmbh-probleme24",
-                "added_at": "2025-07-10 21:33:41"
+                "added_at": "2025-07-11 13:26:04"
             }
         ],
         "phone": "",
@@ -45,7 +45,7 @@
         "notes": "Keine",
         "status": "aktiv",
         "created_at": "2025-07-08 22:21:33",
-        "updated_at": "2025-07-10 21:33:41"
+        "updated_at": "2025-07-11 13:26:04"
     },
     "686e40af6c9654.39627628": {
         "id": "686e40af6c9654.39627628",

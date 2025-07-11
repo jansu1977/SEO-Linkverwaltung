@@ -1,12 +1,17 @@
 <?php
 /**
- * Themenverwaltung mit Farben
+ * Themenverwaltung mit Farben - KORRIGIERTE VERSION
  * pages/topics.php
  */
 
 $action = isset($_GET['action']) ? $_GET['action'] : 'index';
-$topicId = isset($_GET['id']) ? $_GET['id'] : null;
+$topicId = isset($_GET['id']) ? trim($_GET['id']) : null;
 $userId = getCurrentUserId();
+
+// Debug: Parameter-Validierung
+if (isset($_GET['debug']) && ($action === 'edit' || $action === 'delete')) {
+    error_log("Topics Debug - Action: $action, Topic ID: " . ($topicId ?? 'NULL') . ", User ID: $userId");
+}
 
 // POST-Verarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -19,27 +24,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Themen-Name ist erforderlich.';
         } else {
             $topics = loadData('topics.json');
-            $newId = generateId();
             
-            $topics[$newId] = array(
-                'id' => $newId,
-                'user_id' => $userId,
-                'name' => $name,
-                'color' => $color,
-                'description' => $description,
-                'created_at' => date('Y-m-d H:i:s'),
-                'usage_count' => 0
-            );
+            // Prüfen ob Thema bereits existiert
+            $nameExists = false;
+            foreach ($topics as $existingTopic) {
+                if (isset($existingTopic['user_id']) && $existingTopic['user_id'] === $userId 
+                    && isset($existingTopic['name']) && strtolower($existingTopic['name']) === strtolower($name)) {
+                    $nameExists = true;
+                    break;
+                }
+            }
             
-            if (saveData('topics.json', $topics)) {
-                redirectWithMessage('?page=topics', 'Thema erfolgreich erstellt.');
+            if ($nameExists) {
+                $error = 'Ein Thema mit diesem Namen existiert bereits.';
             } else {
-                $error = 'Fehler beim Speichern des Themas.';
+                $newId = generateId();
+                
+                $topics[$newId] = array(
+                    'id' => $newId,
+                    'user_id' => $userId,
+                    'name' => $name,
+                    'color' => $color,
+                    'description' => $description,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'usage_count' => 0
+                );
+                
+                if (saveData('topics.json', $topics)) {
+                    redirectWithMessage('?page=topics', 'Thema "' . $name . '" erfolgreich erstellt.');
+                } else {
+                    $error = 'Fehler beim Speichern des Themas.';
+                }
             }
         }
     } elseif ($action === 'edit' && $topicId) {
         $topics = loadData('topics.json');
-        if (isset($topics[$topicId]) && $topics[$topicId]['user_id'] === $userId) {
+        if (isset($topics[$topicId]) && isset($topics[$topicId]['user_id']) && $topics[$topicId]['user_id'] === $userId) {
             $name = trim($_POST['name'] ?? '');
             $color = trim($_POST['color'] ?? '#4dabf7');
             $description = trim($_POST['description'] ?? '');
@@ -47,35 +67,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($name)) {
                 $error = 'Themen-Name ist erforderlich.';
             } else {
-                $topics[$topicId]['name'] = $name;
-                $topics[$topicId]['color'] = $color;
-                $topics[$topicId]['description'] = $description;
-                $topics[$topicId]['updated_at'] = date('Y-m-d H:i:s');
+                // Prüfen ob neuer Name bereits existiert (außer bei sich selbst)
+                $nameExists = false;
+                foreach ($topics as $existingId => $existingTopic) {
+                    if ($existingId !== $topicId 
+                        && isset($existingTopic['user_id']) && $existingTopic['user_id'] === $userId 
+                        && isset($existingTopic['name']) && strtolower($existingTopic['name']) === strtolower($name)) {
+                        $nameExists = true;
+                        break;
+                    }
+                }
                 
-                if (saveData('topics.json', $topics)) {
-                    redirectWithMessage('?page=topics', 'Thema erfolgreich aktualisiert.');
+                if ($nameExists) {
+                    $error = 'Ein Thema mit diesem Namen existiert bereits.';
                 } else {
-                    $error = 'Fehler beim Aktualisieren des Themas.';
+                    $topics[$topicId]['name'] = $name;
+                    $topics[$topicId]['color'] = $color;
+                    $topics[$topicId]['description'] = $description;
+                    $topics[$topicId]['updated_at'] = date('Y-m-d H:i:s');
+                    
+                    if (saveData('topics.json', $topics)) {
+                        redirectWithMessage('?page=topics', 'Thema "' . $name . '" erfolgreich aktualisiert.');
+                    } else {
+                        $error = 'Fehler beim Aktualisieren des Themas.';
+                    }
                 }
             }
+        } else {
+            $error = 'Thema nicht gefunden oder Sie haben keine Berechtigung.';
         }
     } elseif ($action === 'delete' && $topicId) {
         $topics = loadData('topics.json');
-        if (isset($topics[$topicId]) && $topics[$topicId]['user_id'] === $userId) {
+        
+        // Debug-Informationen
+        if (isset($_GET['debug'])) {
+            error_log("Delete Debug - Topic ID: $topicId, Topics available: " . implode(', ', array_keys($topics)));
+        }
+        
+        if (isset($topics[$topicId]) && isset($topics[$topicId]['user_id']) && $topics[$topicId]['user_id'] === $userId) {
+            $topicName = $topics[$topicId]['name'] ?? 'Unbekannt';
+            
+            // Thema aus Array entfernen
             unset($topics[$topicId]);
+            
             if (saveData('topics.json', $topics)) {
-                redirectWithMessage('?page=topics', 'Thema erfolgreich gelöscht.');
+                redirectWithMessage('?page=topics', 'Thema "' . htmlspecialchars($topicName) . '" erfolgreich gelöscht.');
             } else {
                 $error = 'Fehler beim Löschen des Themas.';
+            }
+        } else {
+            $error = 'Thema nicht gefunden oder Sie haben keine Berechtigung zum Löschen.';
+            if (isset($_GET['debug'])) {
+                if (!isset($topics[$topicId])) {
+                    $error .= " (Topic ID $topicId existiert nicht)";
+                } elseif (!isset($topics[$topicId]['user_id'])) {
+                    $error .= " (Topic hat keine User ID)";
+                } elseif ($topics[$topicId]['user_id'] !== $userId) {
+                    $error .= " (User ID Mismatch: " . ($topics[$topicId]['user_id'] ?? 'NULL') . " vs $userId)";
+                }
             }
         }
     }
 }
 
-// Daten laden
+// Daten laden und validieren
 $topics = loadData('topics.json');
 $blogs = loadData('blogs.json');
 $customers = loadData('customers.json');
+
+// Datenintegrität prüfen und korrigieren
+$correctedTopics = array();
+foreach ($topics as $topicId => $topic) {
+    // Nur vollständige und gültige Themen übernehmen
+    if (isset($topic['id'], $topic['user_id'], $topic['name']) && !empty($topic['name'])) {
+        $correctedTopics[$topicId] = $topic;
+    }
+}
+
+// Falls Korrekturen gemacht wurden, Datei aktualisieren
+if (count($correctedTopics) !== count($topics)) {
+    saveData('topics.json', $correctedTopics);
+    $topics = $correctedTopics;
+}
 
 // Benutzer-spezifische Themen
 $userTopics = array();
@@ -85,29 +158,43 @@ foreach ($topics as $topicId => $topic) {
     }
 }
 
+// Themen nach Erstellungsdatum sortieren für konsistente Anzeige
+$sortedTopics = $userTopics;
+uasort($sortedTopics, function($a, $b) {
+    return strtotime($b['created_at'] ?? '0') - strtotime($a['created_at'] ?? '0');
+});
+
 // Nutzungsstatistiken berechnen
-foreach ($userTopics as $topicId => &$topic) {
+foreach ($sortedTopics as $topicId => &$topic) {
     $usageCount = 0;
+    $topicName = $topic['name'] ?? '';
     
-    // In Blogs zählen
-    foreach ($blogs as $blog) {
-        if (isset($blog['user_id']) && $blog['user_id'] === $userId && isset($blog['topics'])) {
-            if (in_array($topic['name'], $blog['topics'])) {
-                $usageCount++;
+    if (!empty($topicName)) {
+        // In Blogs zählen
+        foreach ($blogs as $blog) {
+            if (isset($blog['user_id']) && $blog['user_id'] === $userId && isset($blog['topics']) && is_array($blog['topics'])) {
+                if (in_array($topicName, $blog['topics'])) {
+                    $usageCount++;
+                }
             }
         }
-    }
-    
-    // In Kunden zählen
-    foreach ($customers as $customer) {
-        if (isset($customer['user_id']) && $customer['user_id'] === $userId && isset($customer['topics'])) {
-            if (in_array($topic['name'], $customer['topics'])) {
-                $usageCount++;
+        
+        // In Kunden zählen
+        foreach ($customers as $customer) {
+            if (isset($customer['user_id']) && $customer['user_id'] === $userId && isset($customer['topics']) && is_array($customer['topics'])) {
+                if (in_array($topicName, $customer['topics'])) {
+                    $usageCount++;
+                }
             }
         }
     }
     
     $topic['usage_count'] = $usageCount;
+    
+    // Auch im ursprünglichen Array aktualisieren
+    if (isset($userTopics[$topicId])) {
+        $userTopics[$topicId]['usage_count'] = $usageCount;
+    }
 }
 
 // Vordefinierte Farbpalette
@@ -133,6 +220,67 @@ if ($action === 'index'): ?>
 
     <?php showFlashMessage(); ?>
 
+    <?php if (isset($error)): ?>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            <?= htmlspecialchars($error) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Debug für URL-Parameter -->
+    <?php if (isset($_GET['debug']) && $action === 'index'): ?>
+        <div class="alert alert-warning" style="margin-bottom: 20px;">
+            <h4>URL-Parameter Debug</h4>
+            <div style="font-family: monospace; font-size: 12px;">
+                <div><strong>$_GET:</strong> <?= htmlspecialchars(json_encode($_GET)) ?></div>
+                <div><strong>Action:</strong> <?= htmlspecialchars($action) ?></div>
+                <div><strong>Topic ID:</strong> <?= htmlspecialchars($topicId ?? 'NULL') ?></div>
+                <div><strong>Current User ID:</strong> <?= htmlspecialchars($userId) ?></div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- Debug Information (nur bei Entwicklung anzeigen) -->
+    <?php if (isset($_GET['debug']) && $_GET['debug'] === '1'): ?>
+        <div class="alert alert-info" style="margin-bottom: 20px;">
+            <h4>Debug-Informationen</h4>
+            <p><strong>Anzahl geladener Themen:</strong> <?= count($topics) ?></p>
+            <p><strong>Anzahl Benutzer-Themen:</strong> <?= count($userTopics) ?></p>
+            <p><strong>User ID:</strong> <?= htmlspecialchars($userId) ?></p>
+            
+            <h5 style="margin-top: 16px;">Themen-Vergleich:</h5>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px;">
+                <div>
+                    <strong>Alle geladenen Themen:</strong>
+                    <pre style="background: #f4f4f4; padding: 10px; margin: 10px 0; border-radius: 4px; overflow: auto; max-height: 200px; font-size: 11px;"><?= htmlspecialchars(json_encode($topics, JSON_PRETTY_PRINT)) ?></pre>
+                </div>
+                <div>
+                    <strong>Gefilterte Benutzer-Themen:</strong>
+                    <pre style="background: #f4f4f4; padding: 10px; margin: 10px 0; border-radius: 4px; overflow: auto; max-height: 200px; font-size: 11px;"><?= htmlspecialchars(json_encode($userTopics, JSON_PRETTY_PRINT)) ?></pre>
+                </div>
+            </div>
+            
+            <h5 style="margin-top: 16px;">Einzelprüfung der problematischen ID:</h5>
+            <?php 
+            $problemId = '68718cf14384b1.99354540';
+            if (isset($topics[$problemId])): 
+                $problemTopic = $topics[$problemId];
+            ?>
+                <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <strong>Rohe Daten aus topics.json für ID <?= $problemId ?>:</strong><br>
+                    Name: "<?= htmlspecialchars($problemTopic['name'] ?? 'NULL') ?>"<br>
+                    Farbe: "<?= htmlspecialchars($problemTopic['color'] ?? 'NULL') ?>"<br>
+                    User ID: "<?= htmlspecialchars($problemTopic['user_id'] ?? 'NULL') ?>"<br>
+                    Vollständige Daten: <?= htmlspecialchars(json_encode($problemTopic)) ?>
+                </div>
+            <?php else: ?>
+                <div style="background: #f8d7da; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <strong>FEHLER:</strong> Thema mit ID <?= $problemId ?> nicht in topics.json gefunden!
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <!-- Statistiken -->
     <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 30px;">
         <div class="stat-card">
@@ -154,7 +302,7 @@ if ($action === 'index'): ?>
                     <?php 
                     $totalUsage = 0;
                     foreach ($userTopics as $topic) {
-                        $totalUsage += $topic['usage_count'];
+                        $totalUsage += intval($topic['usage_count'] ?? 0);
                     }
                     echo $totalUsage;
                     ?>
@@ -193,19 +341,41 @@ if ($action === 'index'): ?>
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">Ihre Themen</h3>
-                <p class="card-subtitle">Alle erstellten Themen mit Farbzuordnung</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <p class="card-subtitle">Alle erstellten Themen mit Farbzuordnung</p>
+                    <?php if (isset($_GET['debug'])): ?>
+                        <a href="?page=topics" class="btn btn-sm btn-secondary">Debug ausblenden</a>
+                    <?php else: ?>
+                        <a href="?page=topics&debug=1" class="btn btn-sm btn-info">Debug anzeigen</a>
+                    <?php endif; ?>
+                </div>
             </div>
             <div class="card-body">
                 <div class="topics-grid">
-                    <?php foreach ($userTopics as $topicId => $topic): ?>
-                        <div class="topic-item" data-topic-id="<?php echo $topicId; ?>">
-                            <div class="topic-color" style="background-color: <?php echo e($topic['color']); ?>;">
+                    <?php 
+                    // Themen nach Erstellungsdatum sortieren (neueste zuerst)
+                    $sortedTopics = $userTopics;
+                    uasort($sortedTopics, function($a, $b) {
+                        return strtotime($b['created_at'] ?? '0') - strtotime($a['created_at'] ?? '0');
+                    });
+                    
+                    foreach ($sortedTopics as $currentTopicId => $currentTopic): 
+                        // Debug: Aktuelle Werte direkt aus dem Array extrahieren
+                        $displayName = isset($currentTopic['name']) ? $currentTopic['name'] : 'Unbenannt';
+                        $displayColor = isset($currentTopic['color']) ? $currentTopic['color'] : '#4dabf7';
+                        $displayDescription = isset($currentTopic['description']) ? $currentTopic['description'] : '';
+                        $displayUsageCount = isset($currentTopic['usage_count']) ? intval($currentTopic['usage_count']) : 0;
+                        $displayCreatedAt = isset($currentTopic['created_at']) ? $currentTopic['created_at'] : date('Y-m-d H:i:s');
+                    ?>
+                        <div class="topic-item" data-topic-id="<?= htmlspecialchars($currentTopicId) ?>">
+                            <div class="topic-color" style="background-color: <?= htmlspecialchars($displayColor) ?>;">
                                 <div class="topic-color-overlay">
                                     <div class="topic-actions">
-                                        <a href="?page=topics&action=edit&id=<?php echo $topicId; ?>" class="topic-action-btn" title="Bearbeiten">
+                                        <a href="?page=topics&action=edit&id=<?= urlencode($currentTopicId) ?>" class="topic-action-btn" title="Bearbeiten">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="?page=topics&action=delete&id=<?php echo $topicId; ?>" class="topic-action-btn" title="Löschen" onclick="return confirm('Thema wirklich löschen?')">
+                                        <a href="?page=topics&action=delete&id=<?= urlencode($currentTopicId) ?>" class="topic-action-btn topic-delete-btn" title="Löschen" 
+                                           onclick="return confirm('Thema &quot;<?= htmlspecialchars($displayName) ?>&quot; wirklich löschen?\n\nID: <?= htmlspecialchars($currentTopicId) ?>')">
                                             <i class="fas fa-trash"></i>
                                         </a>
                                     </div>
@@ -213,21 +383,32 @@ if ($action === 'index'): ?>
                             </div>
                             
                             <div class="topic-content">
-                                <h4 class="topic-name"><?php echo e($topic['name']); ?></h4>
-                                <?php if (!empty($topic['description'])): ?>
-                                    <p class="topic-description"><?php echo e($topic['description']); ?></p>
+                                <h4 class="topic-name"><?= htmlspecialchars($displayName) ?></h4>
+                                <?php if (!empty($displayDescription)): ?>
+                                    <p class="topic-description"><?= htmlspecialchars($displayDescription) ?></p>
                                 <?php endif; ?>
                                 
                                 <div class="topic-meta">
                                     <span class="usage-count">
                                         <i class="fas fa-chart-bar"></i>
-                                        <?php echo $topic['usage_count']; ?> Verwendungen
+                                        <?= $displayUsageCount ?> Verwendungen
                                     </span>
                                     <span class="created-date">
                                         <i class="fas fa-calendar"></i>
-                                        <?php echo formatDate($topic['created_at']); ?>
+                                        <?= formatDate($displayCreatedAt) ?>
                                     </span>
                                 </div>
+                                
+                                <?php if (isset($_GET['debug'])): ?>
+                                    <div style="margin-top: 8px; padding: 8px; background: #2a2d3e; border-radius: 4px; font-size: 11px; font-family: monospace; color: #e4e4e7;">
+                                        <div><strong>Array-Key:</strong> <?= htmlspecialchars($currentTopicId) ?></div>
+                                        <div><strong>Topic-ID:</strong> <?= htmlspecialchars($currentTopic['id'] ?? 'NULL') ?></div>
+                                        <div><strong>Display-Name:</strong> <?= htmlspecialchars($displayName) ?></div>
+                                        <div><strong>Display-Farbe:</strong> <?= htmlspecialchars($displayColor) ?></div>
+                                        <div><strong>User ID:</strong> <?= htmlspecialchars($currentTopic['user_id'] ?? 'NULL') ?></div>
+                                        <div><strong>JSON-Data:</strong> <?= htmlspecialchars(json_encode($currentTopic)) ?></div>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -245,18 +426,24 @@ if ($action === 'index'): ?>
                 <div class="topic-preview">
                     <h4 style="margin-bottom: 16px;">Als Badges:</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px;">
-                        <?php foreach ($userTopics as $topic): ?>
-                            <span class="topic-badge" style="background-color: <?php echo e($topic['color']); ?>;">
-                                <?php echo e($topic['name']); ?>
+                        <?php foreach ($sortedTopics as $currentTopicId => $currentTopic): 
+                            $displayName = isset($currentTopic['name']) ? $currentTopic['name'] : 'Unbenannt';
+                            $displayColor = isset($currentTopic['color']) ? $currentTopic['color'] : '#4dabf7';
+                        ?>
+                            <span class="topic-badge" style="background-color: <?= htmlspecialchars($displayColor) ?>;">
+                                <?= htmlspecialchars($displayName) ?>
                             </span>
                         <?php endforeach; ?>
                     </div>
                     
                     <h4 style="margin-bottom: 16px;">Als Tags:</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <?php foreach ($userTopics as $topic): ?>
-                            <span class="topic-tag" style="border-color: <?php echo e($topic['color']); ?>; color: <?php echo e($topic['color']); ?>;">
-                                #<?php echo e($topic['name']); ?>
+                        <?php foreach ($sortedTopics as $currentTopicId => $currentTopic): 
+                            $displayName = isset($currentTopic['name']) ? $currentTopic['name'] : 'Unbenannt';
+                            $displayColor = isset($currentTopic['color']) ? $currentTopic['color'] : '#4dabf7';
+                        ?>
+                            <span class="topic-tag" style="border-color: <?= htmlspecialchars($displayColor) ?>; color: <?= htmlspecialchars($displayColor) ?>;">
+                                #<?= htmlspecialchars($displayName) ?>
                             </span>
                         <?php endforeach; ?>
                     </div>
@@ -267,9 +454,27 @@ if ($action === 'index'): ?>
 
 <?php elseif ($action === 'create' || ($action === 'edit' && $topicId)): 
     $topic = null;
+    $debugInfo = '';
+    
     if ($action === 'edit') {
-        $topic = isset($topics[$topicId]) ? $topics[$topicId] : null;
-        if (!$topic || $topic['user_id'] !== $userId) {
+        // Debug: Zeige alle verfügbaren IDs
+        $debugInfo .= "Gesuchte Topic-ID: " . htmlspecialchars($topicId) . "\n";
+        $debugInfo .= "Verfügbare Topic-IDs: " . implode(', ', array_keys($topics)) . "\n";
+        
+        // Prüfe explizit, ob die ID existiert
+        if (isset($topics[$topicId])) {
+            $topic = $topics[$topicId];
+            $debugInfo .= "Thema gefunden: " . json_encode($topic) . "\n";
+            
+            // Prüfe Berechtigung
+            if (!isset($topic['user_id']) || $topic['user_id'] !== $userId) {
+                $debugInfo .= "Berechtigung verweigert. Topic User ID: " . ($topic['user_id'] ?? 'NULL') . ", Current User ID: " . $userId . "\n";
+                header('HTTP/1.0 403 Forbidden');
+                echo '<div class="alert alert-danger">Sie haben keine Berechtigung, dieses Thema zu bearbeiten.</div>';
+                return;
+            }
+        } else {
+            $debugInfo .= "Thema mit ID nicht gefunden!\n";
             header('HTTP/1.0 404 Not Found');
             echo '<div class="alert alert-danger">Thema nicht gefunden.</div>';
             return;
@@ -279,26 +484,46 @@ if ($action === 'index'): ?>
     <div class="breadcrumb">
         <a href="?page=topics">Zurück zu Themen</a>
         <i class="fas fa-chevron-right"></i>
-        <span><?php echo $action === 'create' ? 'Thema hinzufügen' : 'Thema bearbeiten'; ?></span>
+        <span><?= $action === 'create' ? 'Thema hinzufügen' : 'Thema bearbeiten' ?></span>
     </div>
 
     <div class="page-header">
         <div>
-            <h1 class="page-title"><?php echo $action === 'create' ? 'Neues Thema hinzufügen' : 'Thema bearbeiten'; ?></h1>
-            <p class="page-subtitle">Erstellen Sie ein Thema mit individueller Farbzuordnung</p>
+            <h1 class="page-title"><?= $action === 'create' ? 'Neues Thema hinzufügen' : 'Thema bearbeiten' ?></h1>
+            <p class="page-subtitle">
+                <?= $action === 'create' ? 'Erstellen Sie ein Thema mit individueller Farbzuordnung' : 'Bearbeiten Sie das Thema "' . htmlspecialchars($topic['name'] ?? 'Unbekannt') . '"' ?>
+            </p>
         </div>
     </div>
 
     <?php if (isset($error)): ?>
         <div class="alert alert-danger">
             <i class="fas fa-exclamation-triangle"></i>
-            <?php echo e($error); ?>
+            <?= htmlspecialchars($error) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- Debug-Informationen für Edit-Modus -->
+    <?php if ($action === 'edit' && isset($_GET['debug'])): ?>
+        <div class="alert alert-info">
+            <h4>Debug-Informationen (Edit-Modus)</h4>
+            <pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; font-size: 11px;"><?= htmlspecialchars($debugInfo) ?></pre>
+            <div style="margin-top: 10px;">
+                <strong>URL Topic ID:</strong> <?= htmlspecialchars($_GET['id'] ?? 'NULL') ?><br>
+                <strong>Verarbeitete Topic ID:</strong> <?= htmlspecialchars($topicId ?? 'NULL') ?><br>
+                <strong>Gefundenes Thema:</strong> <?= $topic ? 'JA' : 'NEIN' ?><br>
+                <?php if ($topic): ?>
+                    <strong>Thema-Name:</strong> <?= htmlspecialchars($topic['name'] ?? 'NULL') ?><br>
+                    <strong>Thema-Farbe:</strong> <?= htmlspecialchars($topic['color'] ?? 'NULL') ?><br>
+                    <strong>Thema-User-ID:</strong> <?= htmlspecialchars($topic['user_id'] ?? 'NULL') ?><br>
+                <?php endif; ?>
+            </div>
         </div>
     <?php endif; ?>
 
     <div class="card">
         <div class="card-body">
-            <form method="post">
+            <form method="post" id="topicForm">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="name" class="form-label">Themen-Name *</label>
@@ -308,9 +533,15 @@ if ($action === 'index'): ?>
                             name="name" 
                             class="form-control" 
                             placeholder="z.B. SEO, Marketing, Webentwicklung"
-                            value="<?php echo e($_POST['name'] ?? ($topic['name'] ?? '')); ?>"
+                            value="<?= htmlspecialchars($_POST['name'] ?? ($topic['name'] ?? '')) ?>"
                             required
+                            autocomplete="off"
                         >
+                        <?php if ($action === 'edit' && isset($_GET['debug'])): ?>
+                            <small style="color: #666; font-size: 11px;">
+                                Debug: Wert aus Array: "<?= htmlspecialchars($topic['name'] ?? 'NULL') ?>"
+                            </small>
+                        <?php endif; ?>
                     </div>
                     <div class="form-group">
                         <label for="color" class="form-label">Farbe</label>
@@ -320,16 +551,21 @@ if ($action === 'index'): ?>
                                 id="color" 
                                 name="color" 
                                 class="form-control color-picker" 
-                                value="<?php echo e($_POST['color'] ?? ($topic['color'] ?? '#4dabf7')); ?>"
+                                value="<?= htmlspecialchars($_POST['color'] ?? ($topic['color'] ?? '#4dabf7')) ?>"
                             >
                             <input 
                                 type="text" 
                                 id="color-text" 
                                 class="form-control color-text" 
-                                value="<?php echo e($_POST['color'] ?? ($topic['color'] ?? '#4dabf7')); ?>"
+                                value="<?= htmlspecialchars($_POST['color'] ?? ($topic['color'] ?? '#4dabf7')) ?>"
                                 readonly
                             >
                         </div>
+                        <?php if ($action === 'edit' && isset($_GET['debug'])): ?>
+                            <small style="color: #666; font-size: 11px;">
+                                Debug: Farbe aus Array: "<?= htmlspecialchars($topic['color'] ?? 'NULL') ?>"
+                            </small>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -341,7 +577,7 @@ if ($action === 'index'): ?>
                         class="form-control" 
                         rows="3"
                         placeholder="Optionale Beschreibung des Themas"
-                    ><?php echo e($_POST['description'] ?? ($topic['description'] ?? '')); ?></textarea>
+                    ><?= htmlspecialchars($_POST['description'] ?? ($topic['description'] ?? '')) ?></textarea>
                 </div>
 
                 <!-- Farbpalette -->
@@ -350,9 +586,9 @@ if ($action === 'index'): ?>
                     <div class="color-palette">
                         <?php foreach ($colorPalette as $paletteColor): ?>
                             <div class="color-option" 
-                                 style="background-color: <?php echo $paletteColor; ?>;" 
-                                 onclick="selectColor('<?php echo $paletteColor; ?>')"
-                                 title="<?php echo $paletteColor; ?>">
+                                 style="background-color: <?= htmlspecialchars($paletteColor) ?>;" 
+                                 onclick="selectColor('<?= htmlspecialchars($paletteColor) ?>')"
+                                 title="<?= htmlspecialchars($paletteColor) ?>">
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -372,13 +608,30 @@ if ($action === 'index'): ?>
                 <div style="display: flex; gap: 12px; margin-top: 24px;">
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-save"></i>
-                        <?php echo $action === 'create' ? 'Thema erstellen' : 'Änderungen speichern'; ?>
+                        <?= $action === 'create' ? 'Thema erstellen' : 'Änderungen speichern' ?>
                     </button>
                     <a href="?page=topics" class="btn btn-secondary">
                         <i class="fas fa-times"></i>
                         Abbrechen
                     </a>
+                    <?php if ($action === 'edit'): ?>
+                        <a href="?page=topics&action=delete&id=<?= urlencode($topicId) ?>" 
+                           class="btn btn-danger" 
+                           onclick="return confirm('Thema &quot;<?= htmlspecialchars($topic['name'] ?? 'Unbekannt') ?>&quot; wirklich löschen?')"
+                           style="margin-left: auto;">
+                            <i class="fas fa-trash"></i>
+                            Thema löschen
+                        </a>
+                    <?php endif; ?>
                 </div>
+
+                <?php if ($action === 'edit'): ?>
+                    <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px;">
+                        <strong>Debug-Links:</strong>
+                        <a href="?page=topics&action=edit&id=<?= urlencode($topicId) ?>&debug=1" style="margin-left: 10px;">Mit Debug anzeigen</a> |
+                        <a href="?page=topics&debug=1" style="margin-left: 10px;">Zurück zur Übersicht mit Debug</a>
+                    </div>
+                <?php endif; ?>
             </form>
         </div>
     </div>
@@ -456,6 +709,11 @@ if ($action === 'index'): ?>
     transform: scale(1.1);
 }
 
+.topic-delete-btn:hover {
+    background: #ef4444 !important;
+    color: white !important;
+}
+
 .topic-content {
     padding: 16px;
 }
@@ -465,6 +723,7 @@ if ($action === 'index'): ?>
     font-weight: 600;
     color: #e4e4e7;
     margin-bottom: 8px;
+    word-break: break-word;
 }
 
 .topic-description {
@@ -472,6 +731,7 @@ if ($action === 'index'): ?>
     color: #8b8fa3;
     margin-bottom: 12px;
     line-height: 1.4;
+    word-break: break-word;
 }
 
 .topic-meta {
@@ -479,6 +739,8 @@ if ($action === 'index'): ?>
     justify-content: space-between;
     font-size: 12px;
     color: #6c757d;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .usage-count, .created-date {
@@ -517,6 +779,7 @@ if ($action === 'index'): ?>
     height: 40px;
     padding: 4px;
     border-radius: 6px;
+    cursor: pointer;
 }
 
 .color-text {
@@ -553,6 +816,12 @@ if ($action === 'index'): ?>
     border: 1px solid #3a3d52;
 }
 
+.alert-info {
+    background: #e8f4ff;
+    color: #0066cc;
+    border: 1px solid #b3d9ff;
+}
+
 @media (max-width: 768px) {
     .topics-grid {
         grid-template-columns: 1fr;
@@ -560,6 +829,11 @@ if ($action === 'index'): ?>
     
     .color-palette {
         grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .topic-meta {
+        flex-direction: column;
+        gap: 4px;
     }
 }
 </style>
@@ -575,7 +849,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (colorPicker && colorText) {
         colorPicker.addEventListener('input', function() {
-            colorText.value = this.value;
+            colorText.value = this.value.toUpperCase();
             updatePreview();
         });
     }
@@ -585,7 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updatePreview() {
-        const name = nameInput ? nameInput.value || 'Themen-Name' : 'Themen-Name';
+        const name = nameInput ? (nameInput.value.trim() || 'Themen-Name') : 'Themen-Name';
         const color = colorPicker ? colorPicker.value : '#4dabf7';
         
         if (previewBadge) {
@@ -602,15 +876,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initial preview update
     updatePreview();
+    
+    // Form validation
+    const form = document.getElementById('topicForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const nameValue = nameInput ? nameInput.value.trim() : '';
+            if (!nameValue) {
+                e.preventDefault();
+                alert('Bitte geben Sie einen Themen-Namen ein.');
+                if (nameInput) nameInput.focus();
+                return false;
+            }
+        });
+    }
 });
 
 function selectColor(color) {
     const colorPicker = document.getElementById('color');
     const colorText = document.getElementById('color-text');
     
-    if (colorPicker) {
+    if (colorPicker && colorText) {
         colorPicker.value = color;
-        colorText.value = color;
+        colorText.value = color.toUpperCase();
         
         // Update preview
         const previewBadge = document.getElementById('previewBadge');
@@ -626,4 +914,39 @@ function selectColor(color) {
         }
     }
 }
+
+// Debug-Funktionen
+function refreshTopicsData() {
+    if (confirm('Themen-Daten neu laden? (Aktuelle Eingaben gehen verloren)')) {
+        window.location.reload();
+    }
+}
+
+// URL-Parameter Debug
+function showUrlDebug() {
+    const urlParams = new URLSearchParams(window.location.search);
+    let debugInfo = 'URL-Parameter:\n';
+    for (const [key, value] of urlParams) {
+        debugInfo += `${key}: ${value}\n`;
+    }
+    alert(debugInfo);
+}
+
+// Erweiterte Lösch-Bestätigung
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteButtons = document.querySelectorAll('.topic-delete-btn');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.href;
+            const topicName = this.closest('.topic-item').querySelector('.topic-name').textContent;
+            const topicId = this.closest('.topic-item').dataset.topicId;
+            
+            if (confirm(`Thema "${topicName}" wirklich löschen?\n\nID: ${topicId}\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`)) {
+                window.location.href = url;
+            }
+        });
+    });
+});
 </script>

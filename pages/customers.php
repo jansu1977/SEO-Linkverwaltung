@@ -113,23 +113,25 @@ $users = loadData('users.json');
 $currentUser = $users[$userId] ?? null;
 $isAdmin = $currentUser && ($currentUser['role'] === 'admin');
 
-// Debug-Information für Problemanalyse
-if (isset($_GET['debug']) && $_GET['debug'] === '1') {
-    echo '<div style="background: #ff0000; color: white; padding: 10px; margin: 10px 0; position: fixed; top: 0; left: 0; right: 0; z-index: 9999;">';
-    echo '<h3>DEBUG INFO - CUSTOMERS MAIN:</h3>';
-    echo '<p><strong>Action:</strong> ' . htmlspecialchars($action) . '</p>';
-    echo '<p><strong>Customer ID:</strong> ' . htmlspecialchars($customerId ?? 'KEINE') . '</p>';
-    echo '<p><strong>Current User ID:</strong> ' . $userId . '</p>';
-    echo '<p><strong>Ist Admin:</strong> ' . ($isAdmin ? 'JA' : 'NEIN') . '</p>';
-    echo '<p><strong>Anzahl geladene Kunden:</strong> ' . count($customers) . '</p>';
-    if ($customerId && isset($customers[$customerId])) {
-        echo '<p><strong>Kunde gefunden:</strong> ' . htmlspecialchars($customers[$customerId]['name']) . '</p>';
-    } elseif ($customerId) {
-        echo '<p><strong>Kunde NICHT gefunden mit ID:</strong> ' . htmlspecialchars($customerId) . '</p>';
+// GET-Verarbeitung für DELETE (separate Behandlung)
+if ($action === 'delete' && $customerId && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $customers = loadData('customers.json');
+    
+    // Kunden-Validierung
+    if (isset($customers[$customerId]) && ($isAdmin || getArrayValue($customers[$customerId], 'user_id') === $userId)) {
+        unset($customers[$customerId]);
+        if (saveData('customers.json', $customers)) {
+            redirectWithMessage('?page=customers', 'Kunde erfolgreich gelöscht.');
+        } else {
+            setFlashMessage('Fehler beim Löschen des Kunden.', 'error');
+            header('Location: ?page=customers');
+            exit;
+        }
+    } else {
+        setFlashMessage('Kunde nicht gefunden oder keine Berechtigung.', 'error');
+        header('Location: ?page=customers');
+        exit;
     }
-    echo '<button onclick="this.parentElement.style.display=\'none\'" style="position: absolute; top: 5px; right: 10px; background: white; color: red; border: none; padding: 2px 6px;">X</button>';
-    echo '</div>';
-    echo '<div style="margin-top: 100px;"></div>'; // Platz für Debug-Box
 }
 
 // POST-Verarbeitung
@@ -336,6 +338,776 @@ if ($isAdmin) {
     }
 }
 
+// CREATE & EDIT ACTION - Formulare
+if ($action === 'create' || ($action === 'edit' && $customerId)):
+    $customer = null;
+    if ($action === 'edit') {
+        $customer = $customers[$customerId] ?? null;
+        if (!$customer || (!$isAdmin && getArrayValue($customer, 'user_id') !== $userId)) {
+            echo '<div class="error-page"><div class="error-content" style="text-align: center; padding: 60px 20px;">';
+            echo '<i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #f56565; margin-bottom: 16px;"></i>';
+            echo '<h1 style="margin-bottom: 16px;">Kunde nicht gefunden</h1>';
+            echo '<p style="color: #8b8fa3; margin-bottom: 24px;">Der angeforderte Kunde existiert nicht oder Sie haben keine Berechtigung.</p>';
+            echo '<a href="?page=customers" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Zurück zur Kundenverwaltung</a>';
+            echo '</div></div>';
+            return;
+        }
+    }
+?>
+
+<div class="breadcrumb">
+    <a href="?page=customers">Zurück zu Kunden</a>
+    <i class="fas fa-chevron-right"></i>
+    <span><?= $action === 'create' ? 'Neuer Kunde' : 'Kunde bearbeiten' ?></span>
+</div>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            <?= $action === 'create' ? 'Neuen Kunden erstellen' : 'Kunde bearbeiten' ?>
+        </h1>
+        <p class="page-subtitle">
+            <?= $action === 'create' 
+                ? 'Fügen Sie einen neuen Kunden zu Ihrem System hinzu' 
+                : 'Bearbeiten Sie die Informationen für ' . e($customer['name'] ?? '') ?>
+        </p>
+    </div>
+</div>
+
+<?php showFlashMessage(); ?>
+
+<?php if (!empty($errors)): ?>
+    <div class="alert alert-danger">
+        <ul style="margin: 0; padding-left: 20px;">
+            <?php foreach ($errors as $error): ?>
+                <li><?= e($error) ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Kundendaten</h3>
+        <p class="card-subtitle">Alle mit * markierten Felder sind Pflichtfelder</p>
+    </div>
+    <div class="card-body">
+        <form method="post" action="?page=customers&action=<?= $action ?><?= $customerId ? '&id=' . urlencode($customerId) : '' ?>" class="form">
+            <!-- Grundinformationen -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h4 class="section-title">
+                        <i class="fas fa-user section-icon"></i>
+                        Grundinformationen
+                    </h4>
+                    <p class="section-subtitle">Basis-Kundendaten und Kontaktinformationen</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="name" class="form-label required">
+                                <i class="fas fa-user-tag"></i>
+                                Name
+                            </label>
+                            <input type="text" id="name" name="name" class="form-control" 
+                                   value="<?= e($customer['name'] ?? $_POST['name'] ?? '') ?>" 
+                                   required placeholder="Vollständiger Name">
+                            <div class="field-hint">Der vollständige Name des Kunden</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="phone" class="form-label">
+                                <i class="fas fa-phone"></i>
+                                Telefon
+                            </label>
+                            <input type="tel" id="phone" name="phone" class="form-control" 
+                                   value="<?= e($customer['phone'] ?? $_POST['phone'] ?? '') ?>"
+                                   placeholder="+49 123 456789">
+                            <div class="field-hint">Telefonnummer für direkten Kontakt</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope"></i>
+                                E-Mail
+                            </label>
+                            <input type="email" id="email" name="email" class="form-control" 
+                                   value="<?= e($customer['email'] ?? $_POST['email'] ?? '') ?>"
+                                   placeholder="kunde@beispiel.de">
+                            <div class="field-hint">Haupt-E-Mail-Adresse des Kunden</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="status" class="form-label">
+                                <i class="fas fa-toggle-on"></i>
+                                Status
+                            </label>
+                            <select id="status" name="status" class="form-control">
+                                <option value="aktiv" <?= (($customer['status'] ?? $_POST['status'] ?? 'aktiv') === 'aktiv') ? 'selected' : '' ?>>
+                                    🟢 Aktiv
+                                </option>
+                                <option value="inaktiv" <?= (($customer['status'] ?? $_POST['status'] ?? '') === 'inaktiv') ? 'selected' : '' ?>>
+                                    🔴 Inaktiv
+                                </option>
+                            </select>
+                            <div class="field-hint">Aktueller Status des Kunden</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Firmeninformationen -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h4 class="section-title">
+                        <i class="fas fa-building section-icon"></i>
+                        Firmeninformationen
+                    </h4>
+                    <p class="section-subtitle">Unternehmens- und Geschäftsdaten</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-col-full">
+                        <div class="form-group">
+                            <label for="company" class="form-label">
+                                <i class="fas fa-briefcase"></i>
+                                Unternehmen
+                            </label>
+                            <input type="text" id="company" name="company" class="form-control" 
+                                   value="<?= e($customer['company'] ?? $_POST['company'] ?? '') ?>"
+                                   placeholder="Name des Unternehmens">
+                            <div class="field-hint">Offizieller Firmenname oder Organisation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Adressinformationen -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h4 class="section-title">
+                        <i class="fas fa-map-marker-alt section-icon"></i>
+                        Adressinformationen
+                    </h4>
+                    <p class="section-subtitle">Vollständige Postanschrift</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-col-full">
+                        <div class="form-group">
+                            <label for="address" class="form-label">
+                                <i class="fas fa-home"></i>
+                                Straße und Hausnummer
+                            </label>
+                            <input type="text" id="address" name="address" class="form-control" 
+                                   value="<?= e($customer['address'] ?? $_POST['address'] ?? '') ?>"
+                                   placeholder="Musterstraße 123">
+                            <div class="field-hint">Vollständige Straßenanschrift mit Hausnummer</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="postal_code" class="form-label">
+                                <i class="fas fa-mail-bulk"></i>
+                                PLZ
+                            </label>
+                            <input type="text" id="postal_code" name="postal_code" class="form-control" 
+                                   value="<?= e($customer['postal_code'] ?? $_POST['postal_code'] ?? '') ?>"
+                                   placeholder="12345">
+                            <div class="field-hint">Postleitzahl</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="city" class="form-label">
+                                <i class="fas fa-city"></i>
+                                Stadt
+                            </label>
+                            <input type="text" id="city" name="city" class="form-control" 
+                                   value="<?= e($customer['city'] ?? $_POST['city'] ?? '') ?>"
+                                   placeholder="Musterstadt">
+                            <div class="field-hint">Ortsname</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col-full">
+                        <div class="form-group">
+                            <label for="country" class="form-label">
+                                <i class="fas fa-globe"></i>
+                                Land
+                            </label>
+                            <input type="text" id="country" name="country" class="form-control" 
+                                   value="<?= e($customer['country'] ?? $_POST['country'] ?? '') ?>" 
+                                   placeholder="Deutschland">
+                            <div class="field-hint">Land der Hauptgeschäftstätigkeit</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Websites -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h4 class="section-title">
+                        <i class="fas fa-globe-americas section-icon"></i>
+                        Websites
+                    </h4>
+                    <p class="section-subtitle">Online-Präsenzen und Webseiten des Kunden</p>
+                </div>
+                <div id="websitesContainer">
+                    <?php 
+                    $websites = $customer['websites'] ?? $_POST['websites'] ?? [['url' => '', 'title' => '', 'description' => '']];
+                    if (empty($websites)) {
+                        $websites = [['url' => '', 'title' => '', 'description' => '']];
+                    }
+                    foreach ($websites as $index => $website): 
+                    ?>
+                        <div class="website-group" data-index="<?= $index ?>">
+                            <div class="website-card">
+                                <div class="website-header">
+                                    <h5 class="website-title">
+                                        <i class="fas fa-link"></i>
+                                        Website <?= $index + 1 ?>
+                                    </h5>
+                                    <?php if ($index > 0): ?>
+                                        <button type="button" class="btn btn-sm btn-danger remove-website">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label class="form-label">
+                                                <i class="fas fa-link"></i>
+                                                Website-URL
+                                            </label>
+                                            <input type="url" name="websites[<?= $index ?>][url]" class="form-control" 
+                                                   value="<?= e($website['url'] ?? '') ?>" 
+                                                   placeholder="https://beispiel.de">
+                                            <div class="field-hint">Vollständige URL der Website</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label class="form-label">
+                                                <i class="fas fa-tag"></i>
+                                                Titel
+                                            </label>
+                                            <input type="text" name="websites[<?= $index ?>][title]" class="form-control" 
+                                                   value="<?= e($website['title'] ?? '') ?>" 
+                                                   placeholder="Wird automatisch erkannt">
+                                            <div class="field-hint">Name oder Titel der Website</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col-full">
+                                        <div class="form-group">
+                                            <label class="form-label">
+                                                <i class="fas fa-comment"></i>
+                                                Beschreibung
+                                            </label>
+                                            <input type="text" name="websites[<?= $index ?>][description]" class="form-control" 
+                                                   value="<?= e($website['description'] ?? '') ?>" 
+                                                   placeholder="Kurze Beschreibung der Website (optional)">
+                                            <div class="field-hint">Zusätzliche Informationen zur Website</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" id="addWebsite" class="btn btn-secondary add-website-btn">
+                    <i class="fas fa-plus"></i> Weitere Website hinzufügen
+                </button>
+            </div>
+
+            <!-- Notizen -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h4 class="section-title">
+                        <i class="fas fa-sticky-note section-icon"></i>
+                        Zusätzliche Informationen
+                    </h4>
+                    <p class="section-subtitle">Interne Notizen und wichtige Hinweise</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-col-full">
+                        <div class="form-group">
+                            <label for="notes" class="form-label">
+                                <i class="fas fa-edit"></i>
+                                Notizen
+                            </label>
+                            <textarea id="notes" name="notes" class="form-control notes-textarea" rows="5" 
+                                      placeholder="Zusätzliche Notizen zum Kunden, wichtige Informationen, Besonderheiten..."><?= e($customer['notes'] ?? $_POST['notes'] ?? '') ?></textarea>
+                            <div class="field-hint">Interne Notizen, die nur für Sie sichtbar sind</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form-Buttons -->
+            <div class="form-actions">
+                <div class="action-buttons-container">
+                    <a href="?page=customers<?= $action === 'edit' && $customerId ? '&action=view&id=' . urlencode($customerId) : '' ?>" class="btn btn-secondary btn-cancel">
+                        <i class="fas fa-times"></i> 
+                        Abbrechen
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-save">
+                        <i class="fas fa-save"></i> 
+                        <?= $action === 'create' ? 'Kunde erstellen' : 'Änderungen speichern' ?>
+                    </button>
+                </div>
+                <div class="form-footer-info">
+                    <i class="fas fa-info-circle"></i>
+                    <?= $action === 'create' 
+                        ? 'Nach dem Erstellen können Sie sofort Links für diesen Kunden anlegen.' 
+                        : 'Ihre Änderungen werden sofort gespeichert und sind direkt verfügbar.' ?>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CSS für das moderne Filter-Design -->
+<style>
+/* Verbessertes Formular-Styling */
+.form-section {
+    background: #2a2d42;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    border: 1px solid #3a3d52;
+    overflow: hidden;
+}
+
+.section-header {
+    background: linear-gradient(135deg, #3a3d52, #2a2d42);
+    padding: 20px 24px;
+    border-bottom: 1px solid #3a3d52;
+}
+
+.section-title {
+    margin: 0;
+    color: #e2e8f0;
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-icon {
+    color: #4dabf7;
+    font-size: 16px;
+}
+
+.section-subtitle {
+    margin: 6px 0 0 0;
+    color: #8b8fa3;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 24px;
+}
+
+.form-col-full {
+    grid-column: 1 / -1;
+}
+
+.form-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.form-label.required::after {
+    content: " *";
+    color: #f56565;
+    font-weight: bold;
+}
+
+.form-label i {
+    color: #4dabf7;
+    font-size: 12px;
+    width: 14px;
+}
+
+.form-control {
+    background: #1a1d29;
+    border: 2px solid #3a3d52;
+    color: #e2e8f0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #4dabf7;
+    background: #1f2235;
+    box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
+    outline: none;
+}
+
+.form-control::placeholder {
+    color: #6b7280;
+}
+
+.field-hint {
+    font-size: 12px;
+    color: #8b8fa3;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+.notes-textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+/* Website-spezifische Styles */
+.website-card {
+    background: #1a1d29;
+    border: 1px solid #3a3d52;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.website-header {
+    background: #2a2d42;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3a3d52;
+}
+
+.website-title {
+    margin: 0;
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.website-title i {
+    color: #4dabf7;
+}
+
+.website-card .form-row {
+    padding: 16px;
+}
+
+.add-website-btn {
+    margin-top: 12px;
+    background: #2a2d42;
+    border: 2px dashed #3a3d52;
+    color: #8b8fa3;
+    padding: 12px 20px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.add-website-btn:hover {
+    border-color: #4dabf7;
+    color: #4dabf7;
+    background: #1f2235;
+}
+
+/* Form Actions */
+.form-actions {
+    background: #2a2d42;
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid #3a3d52;
+    margin-top: 24px;
+}
+
+.action-buttons-container {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+}
+
+.btn-cancel {
+    background: #374151;
+    border-color: #4b5563;
+    color: #e2e8f0;
+    padding: 12px 24px;
+    font-weight: 500;
+}
+
+.btn-cancel:hover {
+    background: #4b5563;
+    border-color: #6b7280;
+    color: #f3f4f6;
+}
+
+.btn-save {
+    background: linear-gradient(135deg, #4dabf7, #339af0);
+    border-color: #4dabf7;
+    color: #ffffff;
+    padding: 12px 24px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(77, 171, 247, 0.2);
+}
+
+.btn-save:hover {
+    background: linear-gradient(135deg, #339af0, #228be6);
+    border-color: #339af0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(77, 171, 247, 0.3);
+}
+
+.form-footer-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #8b8fa3;
+    font-size: 13px;
+    padding: 12px 16px;
+    background: #1a1d29;
+    border-radius: 6px;
+    border-left: 3px solid #4dabf7;
+}
+
+.form-footer-info i {
+    color: #4dabf7;
+    font-size: 14px;
+}
+
+.btn {
+    transition: all 0.3s ease;
+    border-radius: 6px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px;
+    }
+    
+    .section-header {
+        padding: 16px 20px;
+    }
+    
+    .section-title {
+        font-size: 16px;
+    }
+    
+    .form-control {
+        padding: 10px 14px;
+    }
+    
+    .action-buttons-container {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+    
+    .btn-cancel,
+    .btn-save {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .form-footer-info {
+        text-align: center;
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+
+.form-control:hover {
+    border-color: #4a5568;
+}
+
+.website-card:hover {
+    border-color: #4a5568;
+}
+
+select.form-control option {
+    background: #1a1d29;
+    color: #e2e8f0;
+    padding: 8px;
+}
+
+.btn-save:active {
+    transform: translateY(0);
+    transition: transform 0.1s ease;
+}
+
+.btn:focus,
+.form-control:focus {
+    outline: 2px solid #4dabf7;
+    outline-offset: 2px;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background: linear-gradient(135deg, #2a2d42, #1f2235);
+    border-bottom: 2px solid #3a3d52;
+}
+
+.card-title {
+    color: #e2e8f0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.card-subtitle {
+    color: #8b8fa3;
+    font-size: 14px;
+    margin-top: 4px;
+}
+</style>
+
+<script>
+// Website-Management JavaScript
+let websiteIndex = <?= count($websites) ?>;
+
+document.getElementById('addWebsite').addEventListener('click', function() {
+    const container = document.getElementById('websitesContainer');
+    const newWebsite = document.createElement('div');
+    newWebsite.className = 'website-group';
+    newWebsite.setAttribute('data-index', websiteIndex);
+    
+    newWebsite.innerHTML = `
+        <div class="website-card">
+            <div class="website-header">
+                <h5 class="website-title">
+                    <i class="fas fa-link"></i>
+                    Website ${websiteIndex + 1}
+                </h5>
+                <button type="button" class="btn btn-sm btn-danger remove-website">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-link"></i>
+                            Website-URL
+                        </label>
+                        <input type="url" name="websites[${websiteIndex}][url]" class="form-control" 
+                               placeholder="https://beispiel.de">
+                        <div class="field-hint">Vollständige URL der Website</div>
+                    </div>
+                </div>
+                <div class="form-col">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-tag"></i>
+                            Titel
+                        </label>
+                        <input type="text" name="websites[${websiteIndex}][title]" class="form-control" 
+                               placeholder="Wird automatisch erkannt">
+                        <div class="field-hint">Name oder Titel der Website</div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-col-full">
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-comment"></i>
+                            Beschreibung
+                        </label>
+                        <input type="text" name="websites[${websiteIndex}][description]" class="form-control" 
+                               placeholder="Kurze Beschreibung der Website (optional)">
+                        <div class="field-hint">Zusätzliche Informationen zur Website</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(newWebsite);
+    websiteIndex++;
+});
+
+// Website entfernen
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-website') || e.target.closest('.remove-website')) {
+        const websiteGroup = e.target.closest('.website-group');
+        if (websiteGroup) {
+            websiteGroup.remove();
+            
+            // Website-Nummern neu durchnummerieren
+            const remainingWebsites = document.querySelectorAll('.website-group .website-title');
+            remainingWebsites.forEach((title, index) => {
+                title.innerHTML = `<i class="fas fa-link"></i> Website ${index + 1}`;
+            });
+        }
+    }
+});
+
+// Form-Enhancement: Auto-URL-Formatting
+document.addEventListener('input', function(e) {
+    if (e.target.type === 'url' && e.target.name && e.target.name.includes('[url]')) {
+        const value = e.target.value.trim();
+        if (value && !value.startsWith('http://') && !value.startsWith('https://')) {
+            // Nur wenn der Benutzer aufhört zu tippen (kurze Verzögerung)
+            clearTimeout(e.target.urlTimer);
+            e.target.urlTimer = setTimeout(() => {
+                if (e.target.value === value && value.length > 3) {
+                    e.target.value = 'https://' + value;
+                }
+            }, 1000);
+        }
+    }
+});
+</script>
+
+<?php 
+    return; // Beende hier für Create/Edit-Action
+endif;
+
 // VIEW ACTION - Integriert (nicht mehr als separate Datei)
 if ($action === 'view' && $customerId):
     // Kunden suchen und validieren
@@ -382,18 +1154,6 @@ if ($action === 'view' && $customerId):
 
     // Kosten für diesen Kunden berechnen
     $customerCosts = calculateCustomerCosts($customerId, $links);
-
-    // Debug Info für aktuelle Kundendaten
-    if (isset($_GET['debug']) && $_GET['debug'] === '1') {
-        echo '<div style="background: #0066cc; color: white; padding: 10px; margin: 10px 0;">';
-        echo '<h3>KUNDE ERFOLGREICH GELADEN:</h3>';
-        echo '<p><strong>Geladene Kunden-ID:</strong> ' . htmlspecialchars($customerId) . '</p>';
-        echo '<p><strong>Kundenname:</strong> ' . htmlspecialchars($customer['name']) . '</p>';
-        echo '<p><strong>Kunden User-ID:</strong> ' . htmlspecialchars($customer['user_id'] ?? 'KEINE') . '</p>';
-        echo '<p><strong>Links gefunden:</strong> ' . count($customerLinks) . '</p>';
-        echo '<p><strong>Geschätzte monatliche Kosten:</strong> ' . formatCostDisplay($customerCosts['estimated_monthly'], null, 'EUR') . '</p>';
-        echo '</div>';
-    }
 ?>
 
 <div class="breadcrumb">
@@ -453,11 +1213,6 @@ if ($action === 'view' && $customerId):
     <button class="tab" onclick="showTab('statistics')" style="padding: 12px 24px; background: none; border: none; color: #8b8fa3; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer;">
         Statistiken
     </button>
-    <?php if (!empty($customer['websites']) && is_array($customer['websites']) && count($customer['websites']) > 1): ?>
-        <button class="tab" onclick="showTab('websites')" style="padding: 12px 24px; background: none; border: none; color: #8b8fa3; border-bottom: 2px solid transparent; font-weight: 600; cursor: pointer;">
-            Websites (<?= count($customer['websites']) ?>)
-        </button>
-    <?php endif; ?>
 </div>
 
 <!-- Kundeninformationen Tab -->
@@ -524,17 +1279,6 @@ if ($action === 'view' && $customerId):
                                     <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php elseif (!empty($customer['website'])): ?>
-                    <!-- Backward compatibility für alte einzelne Website -->
-                    <div class="info-item">
-                        <div class="info-label" style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">WEBSITE</div>
-                        <div class="info-value">
-                            <a href="<?= e($customer['website']) ?>" target="_blank" style="color: #4dabf7; text-decoration: none;">
-                                <?= e($customer['website']) ?>
-                                <i class="fas fa-external-link-alt" style="margin-left: 4px; font-size: 10px;"></i>
-                            </a>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -868,7 +1612,7 @@ function showTab(tabName) {
     return; // Beende hier für View-Action
 endif;
 
-// Verschiedene Actions verarbeiten
+// INDEX ACTION - Kundenliste
 if ($action === 'index'): 
 // Statistiken berechnen
 $activeCustomers = array_filter($userCustomers, function($customer) {
@@ -1085,33 +1829,41 @@ foreach ($userCustomers as $customerKey => $customer) {
         </div>
     </div>
 
-    <!-- Filter und Suche -->
-    <div class="action-bar" style="margin-top: 30px;">
-        <div class="search-bar" style="flex: 1; max-width: 400px;">
-            <div style="position: relative;">
-                <i class="fas fa-search search-icon" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #8b8fa3;"></i>
-                <input 
-                    type="text" 
-                    class="form-control search-input" 
-                    placeholder="Kunden durchsuchen..."
-                    id="customerSearch"
-                    onkeyup="filterCustomers()"
-                    style="padding-left: 40px;"
-                >
+    <!-- Filter und Suche - MODERNER STIL -->
+    <div class="modern-filter-section">
+        <div class="modern-filter-container">
+            <div class="modern-search-container">
+                <div class="modern-search-wrapper">
+                    <i class="fas fa-search modern-search-icon"></i>
+                    <input 
+                        type="text" 
+                        class="modern-search-input" 
+                        placeholder="Kunden durchsuchen (Name, Unternehmen, E-Mail)..."
+                        id="customerSearch"
+                        onkeyup="filterCustomers()"
+                    >
+                </div>
             </div>
-        </div>
-        <div style="display: flex; gap: 12px;">
-            <select class="filter-select" id="statusFilter" onchange="filterCustomers()">
-                <option value="">Alle Status</option>
-                <option value="aktiv">Aktive Kunden</option>
-                <option value="inaktiv">Inaktive Kunden</option>
-            </select>
-            <select class="filter-select" id="countryFilter" onchange="filterCustomers()">
-                <option value="">Alle Länder</option>
-                <?php foreach (array_keys($countryStats) as $country): ?>
-                    <option value="<?= e($country) ?>"><?= e($country) ?></option>
-                <?php endforeach; ?>
-            </select>
+            <div class="modern-filter-controls">
+                <div class="modern-filter-group">
+                    <select class="modern-filter-select" id="statusFilter" onchange="filterCustomers()">
+                        <option value="">Nach Status filtern</option>
+                        <option value="aktiv">🟢 Aktive Kunden</option>
+                        <option value="inaktiv">🔴 Inaktive Kunden</option>
+                    </select>
+                </div>
+                <div class="modern-filter-group">
+                    <select class="modern-filter-select" id="countryFilter" onchange="filterCustomers()">
+                        <option value="">Nach Land filtern</option>
+                        <?php foreach (array_keys($countryStats) as $country): ?>
+                            <option value="<?= e($country) ?>">🌍 <?= e($country) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="button" class="modern-filter-reset-btn" onclick="resetFilters()" title="Filter zurücksetzen">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1134,7 +1886,7 @@ foreach ($userCustomers as $customerKey => $customer) {
                             <tr>
                                 <th>Name</th>
                                 <th>Unternehmen</th>
-                                <th>E-Mail</th>
+                                <th>Websites</th>
                                 <th>Telefon</th>
                                 <th>Land</th>
                                 <th>Status</th>
@@ -1191,12 +1943,49 @@ foreach ($userCustomers as $customerKey => $customer) {
                                         <?= e(getArrayValue($customer, 'company', '-')) ?>
                                     </td>
                                     <td style="color: #8b8fa3;">
-                                        <?php if (!empty($customer['email'])): ?>
-                                            <a href="mailto:<?= e($customer['email']) ?>" style="color: #4dabf7; text-decoration: none;">
-                                                <?= e($customer['email']) ?>
-                                            </a>
+                                        <?php 
+                                        // Websites anzeigen - sowohl alte 'website' als auch neue 'websites' unterstützen
+                                        $websites = [];
+                                        
+                                        // Alte 'website' Feld unterstützen (für Rückwärtskompatibilität)
+                                        if (!empty($customer['website'])) {
+                                            $websites[] = [
+                                                'url' => $customer['website'],
+                                                'title' => parse_url($customer['website'], PHP_URL_HOST) ?: $customer['website']
+                                            ];
+                                        }
+                                        
+                                        // Neue 'websites' Array hinzufügen
+                                        if (!empty($customer['websites']) && is_array($customer['websites'])) {
+                                            foreach ($customer['websites'] as $website) {
+                                                if (!empty($website['url'])) {
+                                                    $websites[] = [
+                                                        'url' => $website['url'],
+                                                        'title' => $website['title'] ?: parse_url($website['url'], PHP_URL_HOST) ?: $website['url']
+                                                    ];
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (!empty($websites)): ?>
+                                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                <?php foreach ($websites as $index => $website): ?>
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <i class="fas fa-globe" style="color: #4dabf7; font-size: 10px; margin-right: 2px;"></i>
+                                                        <a href="<?= e($website['url']) ?>" target="_blank" 
+                                                           style="color: #4dabf7; text-decoration: none; font-size: 12px; line-height: 1.3;"
+                                                           title="<?= e($website['url']) ?>">
+                                                            <?= e(strlen($website['title']) > 20 ? substr($website['title'], 0, 20) . '...' : $website['title']) ?>
+                                                            <i class="fas fa-external-link-alt" style="margin-left: 3px; font-size: 9px; opacity: 0.7;"></i>
+                                                        </a>
+                                                    </div>
+                                                    <?php if ($index < count($websites) - 1): ?>
+                                                        <div style="height: 2px;"></div>
+                                                    <?php endif; ?>
+                                                <?php endforeach; ?>
+                                            </div>
                                         <?php else: ?>
-                                            -
+                                            <span style="color: #6b7280; font-style: italic; font-size: 12px;">Keine Websites</span>
                                         <?php endif; ?>
                                     </td>
                                     <td style="color: #8b8fa3;">
@@ -1263,7 +2052,7 @@ foreach ($userCustomers as $customerKey => $customer) {
                                     </td>
                                     <td>
                                         <div style="display: flex; gap: 4px;">
-                                            <a href="?page=customers&action=view&id=<?= urlencode($customerKey) ?>" class="btn btn-sm btn-primary" title="Anzeigen (ID: <?= htmlspecialchars($customerKey) ?>)">
+                                            <a href="?page=customers&action=view&id=<?= urlencode($customerKey) ?>" class="btn btn-sm btn-primary" title="Anzeigen">
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                             <?php if ($isAdmin || getArrayValue($customer, 'user_id') === $userId): ?>
@@ -1284,6 +2073,246 @@ foreach ($userCustomers as $customerKey => $customer) {
             </div>
         </div>
     <?php endif; ?>
+
+<!-- MODERNES FILTER CSS -->
+<style>
+/* MODERN FILTER SECTION - KOMPLETT NEU */
+.modern-filter-section {
+    margin: 24px 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #2a2d42, #1f2235);
+    border-radius: 16px;
+    border: 1px solid #3a3d52;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modern-filter-container {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.modern-search-container {
+    flex: 1;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.modern-search-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.modern-search-input {
+    width: 100%;
+    background: #1a1d29;
+    border: 2px solid #3a3d52;
+    border-radius: 12px;
+    padding: 16px 20px 16px 52px;
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.modern-search-input:focus {
+    outline: none;
+    border-color: #4dabf7;
+    background: #141720;
+    box-shadow: 0 0 0 4px rgba(77, 171, 247, 0.15), 0 4px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+.modern-search-input::placeholder {
+    color: #8b8fa3;
+    font-weight: 400;
+}
+
+.modern-search-icon {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b8fa3;
+    font-size: 16px;
+    pointer-events: none;
+    z-index: 1;
+    transition: color 0.3s ease;
+}
+
+.modern-search-wrapper:focus-within .modern-search-icon {
+    color: #4dabf7;
+}
+
+.modern-filter-controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.modern-filter-group {
+    position: relative;
+}
+
+.modern-filter-select {
+    background: #1a1d29;
+    border: 2px solid #3a3d52;
+    border-radius: 12px;
+    padding: 16px 44px 16px 20px;
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 500;
+    min-width: 200px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394A3B8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 16px center;
+    background-repeat: no-repeat;
+    background-size: 20px;
+}
+
+.modern-filter-select:focus {
+    outline: none;
+    border-color: #4dabf7;
+    background-color: #141720;
+    box-shadow: 0 0 0 4px rgba(77, 171, 247, 0.15), 0 4px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+.modern-filter-select:hover {
+    border-color: #4a5568;
+    background-color: #141720;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.modern-filter-select option {
+    background: #1a1d29;
+    color: #e2e8f0;
+    padding: 12px 16px;
+    border: none;
+}
+
+.modern-filter-reset-btn {
+    background: linear-gradient(135deg, #374151, #4b5563);
+    border: 2px solid #4b5563;
+    border-radius: 12px;
+    padding: 16px 20px;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.modern-filter-reset-btn:hover {
+    background: linear-gradient(135deg, #4b5563, #6b7280);
+    border-color: #6b7280;
+    color: #f3f4f6;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.modern-filter-reset-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.modern-filter-reset-btn i {
+    font-size: 16px;
+}
+
+/* Responsive Design für moderne Filter */
+@media (max-width: 768px) {
+    .modern-filter-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    
+    .modern-search-container {
+        min-width: unset;
+        max-width: unset;
+        width: 100%;
+    }
+    
+    .modern-filter-controls {
+        width: 100%;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    
+    .modern-filter-select {
+        min-width: 140px;
+        flex: 1;
+        padding: 14px 40px 14px 16px;
+        font-size: 14px;
+    }
+    
+    .modern-filter-reset-btn {
+        flex-shrink: 0;
+        padding: 14px 16px;
+        min-width: 48px;
+    }
+}
+
+@media (max-width: 480px) {
+    .modern-filter-section {
+        margin: 16px 0;
+        padding: 16px;
+        border-radius: 12px;
+    }
+    
+    .modern-filter-controls {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .modern-filter-select,
+    .modern-filter-reset-btn {
+        width: 100%;
+    }
+    
+    .modern-search-input {
+        padding: 14px 16px 14px 48px;
+        font-size: 14px;
+    }
+    
+    .modern-search-icon {
+        left: 16px;
+        font-size: 14px;
+    }
+}
+
+/* Hover-Effekte und Animationen */
+.modern-search-input:hover {
+    border-color: #4a5568;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Spezielle Anpassungen für bessere Performance */
+.modern-filter-section * {
+    box-sizing: border-box;
+}
+
+/* Smooth Transitions */
+.modern-filter-section *,
+.modern-filter-section *::before,
+.modern-filter-section *::after {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+</style>
 
 <script>
 // JavaScript-Code für Filter-Funktionalität
@@ -1317,7 +2346,32 @@ function filterCustomers() {
         const matches = searchMatch && statusMatch && countryMatch;
         row.style.display = matches ? 'table-row' : 'none';
     });
+    
+    // Zeige/verstecke Reset-Button
+    const resetBtn = document.querySelector('.modern-filter-reset-btn');
+    const hasActiveFilters = searchValue || statusValue || countryValue;
+    if (resetBtn) {
+        resetBtn.style.display = hasActiveFilters ? 'flex' : 'none';
+    }
 }
+
+function resetFilters() {
+    // Alle Filter zurücksetzen
+    document.getElementById('customerSearch').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('countryFilter').value = '';
+    
+    // Filter anwenden (zeigt alle Zeilen)
+    filterCustomers();
+}
+
+// Filter-Reset-Button initial verstecken
+document.addEventListener('DOMContentLoaded', function() {
+    const resetBtn = document.querySelector('.modern-filter-reset-btn');
+    if (resetBtn) {
+        resetBtn.style.display = 'none';
+    }
+});
 </script>
 
 <?php else: ?>

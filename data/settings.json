@@ -9,19 +9,6 @@
         "auto_backup": false,
         "backup_retention_days": 30
     },
-    "topics": {
-        "custom_topics": [],
-        "predefined_topics": [
-            "SEO",
-            "Content Marketing",
-            "Linkbuilding",
-            "Digital Marketing",
-            "Webentwicklung",
-            "E-Commerce"
-        ],
-        "auto_suggest": true,
-        "case_sensitive": false
-    },
     "notifications": {
         "email_enabled": false,
         "admin_email": "",
