@@ -13,43 +13,12 @@
         "description": "",
         "status": "aktiv",
         "created_at": "2025-07-09 22:08:29",
-        "last_checked": "2025-07-10 22:05:47",
+        "last_checked": "2025-07-10 22:31:13",
         "check_result": {
             "isValid": true,
             "containsTargetLink": true,
             "httpStatus": 200,
             "error": null,
-            "debug": [
-                "=== ERWEITERTE BACKLINK-PRÜFUNG GESTARTET ===",
-                "Backlink-URL: https:\/\/volksinfos.de\/die-wende-vor-der-insolvenz\/",
-                "Ziel-URL: https:\/\/fortfuehrungsprognose24.de\/",
-                "Ankertext: 'https:\/\/fortfuehrungsprognose24.de\/'",
-                "Timestamp: 2025-07-10 22:05:42",
-                "Domain: volksinfos.de",
-                "\n--- SCHRITT 1: HTTP-ERREICHBARKEIT PRÜFEN ---",
-                "Prüfe HTTP-Status für: https:\/\/volksinfos.de\/die-wende-vor-der-insolvenz\/",
-                "User-Agent: Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/605.1.15 (KHTML, like Gecko) Version\/17.1 Safari\/605.1.15",
-                "HTTP-Status: 200",
-                "✅ HTTP-Status OK",
-                "\n--- SCHRITT 2: HTML-CONTENT LADEN ---",
-                "Versuche Strategie: Standard Browser Headers",
-                "✅ Strategie 'Standard Browser Headers' erfolgreich",
-                "Content-Länge: 25,337 Zeichen",
-                "HTML erfolgreich geladen: 25,337 Zeichen",
-                "\n--- SCHRITT 3: LINK-ANALYSE ---",
-                "Normalisierte Ziel-URL: https:\/\/fortfuehrungsprognose24.de",
-                "Normalisierter Ankertext: 'https:\/\/fortfuehrungsprognose24.de\/'",
-                "URL-Varianten (4): https:\/\/fortfuehrungsprognose24.de, https:\/\/fortfuehrungsprognose24.de\/, http:\/\/fortfuehrungsprognose24.de...",
-                "Ankertext-Varianten (2): https:\/\/fortfuehrungsprognose24.de\/, fortfuehrungsprognose24.de...",
-                "Pattern 1: 35 Matches",
-                "Pattern 2: 35 Matches",
-                "Gefundene Links: 64",
-                "Matching-Ergebnisse: URL-Matches=2, Text-Matches=2, Perfekte-Matches=2",
-                "\n=== PRÜFUNG ABGESCHLOSSEN ===",
-                "Verarbeitungszeit: 5950.02ms",
-                "Response-Größe: 25,337 Zeichen",
-                "Endergebnis: LINK GEFUNDEN"
-            ],
             "foundLinks": [
                 {
                     "href": "https:\/\/volksinfos.de\/category\/essen-trinken\/",
@@ -172,23 +141,13 @@
                     "normalizedText": "essen &amp; trinken"
                 }
             ],
-            "responseTime": 5950.02,
+            "responseTime": 5404.03,
             "responseSize": 25337,
             "searchedFor": {
                 "targetUrl": "https:\/\/fortfuehrungsprognose24.de\/",
                 "anchorText": "https:\/\/fortfuehrungsprognose24.de\/",
                 "normalizedUrl": "https:\/\/fortfuehrungsprognose24.de",
-                "normalizedText": "https:\/\/fortfuehrungsprognose24.de\/",
-                "urlVariants": {
-                    "0": "https:\/\/fortfuehrungsprognose24.de",
-                    "1": "https:\/\/fortfuehrungsprognose24.de\/",
-                    "3": "http:\/\/fortfuehrungsprognose24.de",
-                    "5": "https:\/\/www.fortfuehrungsprognose24.de"
-                },
-                "anchorVariants": {
-                    "0": "https:\/\/fortfuehrungsprognose24.de\/",
-                    "3": "fortfuehrungsprognose24.de"
-                }
+                "normalizedText": "https:\/\/fortfuehrungsprognose24.de\/"
             },
             "statistics": {
                 "totalLinks": 20,
@@ -205,11 +164,14 @@
             "url_matches": 2,
             "text_matches": 2,
             "total_links_found": 20,
-            "response_time": 5950.02,
+            "response_time": 5404.03,
             "response_size": 25337
         },
-        "updated_at": "2025-07-10 22:17:21",
-        "customer_website_id": "0"
+        "updated_at": "2025-07-10 23:10:00",
+        "customer_website_id": "0",
+        "cost_amount": 15.33,
+        "cost_type": "monthly",
+        "cost_currency": "EUR"
     },
     "686fbb3bd0c932.35670820": {
         "id": "686fbb3bd0c932.35670820",
@@ -416,6 +378,10 @@
             "response_time": 16102.21,
             "response_size": 89666
         },
-        "updated_at": "2025-07-10 13:10:43"
+        "updated_at": "2025-07-10 23:10:58",
+        "customer_website_id": "",
+        "cost_amount": 22.22,
+        "cost_type": "onetime",
+        "cost_currency": "EUR"
     }
 }

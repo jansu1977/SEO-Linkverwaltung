@@ -1,18 +1,15 @@
 <?php
 /**
- * LinkBuilder Pro - Link-Verwaltung (Erweiterte Version mit Website-Auswahl)
- * pages/links.php - Implementiert Website-Auswahl für Kunden mit mehreren Domains
+ * LinkBuilder Pro - Link-Verwaltung mit Kostenverwaltung
+ * pages/links.php
  */
 
-// Output Buffering starten um Header-Probleme zu vermeiden
 ob_start();
-
-// Error Reporting für Produktion deaktivieren (um Header-Probleme zu vermeiden)
 error_reporting(0);
 ini_set('display_errors', 0);
 
 /**
- * Robuster Backlink-Checker mit Anti-Bot-Detection
+ * Backlink-Checker mit Anti-Bot-Detection
  */
 class RobustBacklinkChecker {
     private $userAgents = [
@@ -26,81 +23,62 @@ class RobustBacklinkChecker {
     private $circuitBreakerStorage = [];
     
     /**
-     * Erweiterte Backlink-Prüfung mit umfassendem Debugging
+     * Backlink-Prüfung
      */
     public function checkBacklinkAdvanced($backlinkUrl, $targetUrl, $anchorText, $options = []) {
-        $debug = [];
-        $debug[] = "=== ERWEITERTE BACKLINK-PRÜFUNG GESTARTET ===";
-        $debug[] = "Backlink-URL: $backlinkUrl";
-        $debug[] = "Ziel-URL: $targetUrl";
-        $debug[] = "Ankertext: '$anchorText'";
-        $debug[] = "Timestamp: " . date('Y-m-d H:i:s');
-        
         $startTime = microtime(true);
         
         // Input-Validierung
         if (empty($backlinkUrl) || empty($targetUrl) || empty($anchorText)) {
-            return $this->createErrorResponse('Fehlende Parameter (URL oder Ankertext)', $debug, 0);
+            return $this->createErrorResponse('Fehlende Parameter (URL oder Ankertext)', 0);
         }
         
         // Domain für Rate-Limiting extrahieren
         $domain = parse_url($backlinkUrl, PHP_URL_HOST);
-        $debug[] = "Domain: $domain";
         
         // Rate-Limiting prüfen
         if (!$this->checkRateLimit($domain)) {
-            $debug[] = "FEHLER: Rate-Limit für Domain $domain erreicht";
-            return $this->createErrorResponse('Rate-Limit erreicht, bitte später versuchen', $debug, 429);
+            return $this->createErrorResponse('Rate-Limit erreicht, bitte später versuchen', 429);
         }
         
         // Circuit-Breaker prüfen
         if (!$this->checkCircuitBreaker($domain)) {
-            $debug[] = "FEHLER: Circuit-Breaker für Domain $domain geöffnet";
-            return $this->createErrorResponse('Domain temporär nicht verfügbar', $debug, 503);
+            return $this->createErrorResponse('Domain temporär nicht verfügbar', 503);
         }
         
         try {
-            // SCHRITT 1: HTTP-Erreichbarkeit prüfen
-            $debug[] = "\n--- SCHRITT 1: HTTP-ERREICHBARKEIT PRÜFEN ---";
-            $statusResult = $this->checkHttpStatus($backlinkUrl, $debug);
+            // HTTP-Erreichbarkeit prüfen
+            $statusResult = $this->checkHttpStatus($backlinkUrl);
             
             if (!$statusResult['isValid']) {
                 $this->recordCircuitBreakerFailure($domain);
-                return $this->createErrorResponse($statusResult['error'], $debug, $statusResult['httpStatus']);
+                return $this->createErrorResponse($statusResult['error'], $statusResult['httpStatus']);
             }
             
-            // SCHRITT 2: HTML-Content laden mit mehreren Fallbacks
-            $debug[] = "\n--- SCHRITT 2: HTML-CONTENT LADEN ---";
-            $contentResult = $this->loadHtmlContent($backlinkUrl, $debug);
+            // HTML-Content laden
+            $contentResult = $this->loadHtmlContent($backlinkUrl);
             
             if (!$contentResult['success']) {
                 $this->recordCircuitBreakerFailure($domain);
-                return $this->createErrorResponse($contentResult['error'], $debug, $contentResult['httpStatus']);
+                return $this->createErrorResponse($contentResult['error'], $contentResult['httpStatus']);
             }
             
             $htmlContent = $contentResult['content'];
             $responseSize = strlen($htmlContent);
-            $debug[] = "HTML erfolgreich geladen: " . number_format($responseSize) . " Zeichen";
             
-            // SCHRITT 3: Link-Analyse
-            $debug[] = "\n--- SCHRITT 3: LINK-ANALYSE ---";
-            $linkResult = $this->analyzeLinks($htmlContent, $targetUrl, $anchorText, $debug);
+            // Link-Analyse
+            $linkResult = $this->analyzeLinks($htmlContent, $targetUrl, $anchorText);
             
             // Circuit-Breaker-Success registrieren
             $this->recordCircuitBreakerSuccess($domain);
             
             $responseTime = round((microtime(true) - $startTime) * 1000, 2);
-            $debug[] = "\n=== PRÜFUNG ABGESCHLOSSEN ===";
-            $debug[] = "Verarbeitungszeit: {$responseTime}ms";
-            $debug[] = "Response-Größe: " . number_format($responseSize) . " Zeichen";
-            $debug[] = "Endergebnis: " . ($linkResult['containsTargetLink'] ? "LINK GEFUNDEN" : "LINK NICHT GEFUNDEN");
             
             return [
                 'isValid' => $statusResult['isValid'],
                 'containsTargetLink' => $linkResult['containsTargetLink'],
                 'httpStatus' => $statusResult['httpStatus'],
                 'error' => null,
-                'debug' => $debug,
                 'foundLinks' => $linkResult['foundLinks'],
                 'responseTime' => $responseTime,
                 'responseSize' => $responseSize,
@@ -108,9 +86,7 @@ class RobustBacklinkChecker {
                     'targetUrl' => $targetUrl,
                     'anchorText' => $anchorText,
                     'normalizedUrl' => $linkResult['normalizedTargetUrl'],
-                    'normalizedText' => $linkResult['normalizedAnchorText'],
-                    'urlVariants' => $linkResult['urlVariants'],
-                    'anchorVariants' => $linkResult['anchorVariants']
+                    'normalizedText' => $linkResult['normalizedAnchorText']
                 ],
                 'statistics' => [
                     'totalLinks' => count($linkResult['foundLinks']),
@@ -122,19 +98,15 @@ class RobustBacklinkChecker {
             
         } catch (Exception $e) {
             $this->recordCircuitBreakerFailure($domain);
-            $debug[] = "AUSNAHME: " . $e->getMessage();
-            return $this->createErrorResponse('Unerwarteter Fehler: ' . $e->getMessage(), $debug, 500);
+            return $this->createErrorResponse('Unerwarteter Fehler: ' . $e->getMessage(), 500);
         }
     }
     
     /**
-     * HTTP-Status prüfen mit erweiterten Headern (SCHNELLE VERSION)
+     * HTTP-Status prüfen
      */
-    private function checkHttpStatus($url, &$debug) {
-        $debug[] = "Prüfe HTTP-Status für: $url";
-        
+    private function checkHttpStatus($url) {
         $userAgent = $this->getRandomUserAgent();
-        $debug[] = "User-Agent: $userAgent";
         
         $context = stream_context_create([
             'http' => [
@@ -148,46 +120,33 @@ class RobustBacklinkChecker {
         $headers = @get_headers($url, 1, $context);
         
         if ($headers === false) {
-            $debug[] = "FEHLER: Konnte keine HTTP-Headers abrufen";
             return ['isValid' => false, 'httpStatus' => 0, 'error' => 'URL nicht erreichbar'];
         }
         
         $statusCode = $this->extractStatusCode($headers);
-        $debug[] = "HTTP-Status: $statusCode";
         
         if ($statusCode >= 200 && $statusCode < 400) {
-            $debug[] = "✅ HTTP-Status OK";
             return ['isValid' => true, 'httpStatus' => $statusCode];
         } else {
-            $debug[] = "❌ HTTP-Status nicht OK: $statusCode";
             return ['isValid' => false, 'httpStatus' => $statusCode, 'error' => "HTTP-Status: $statusCode"];
         }
     }
     
     /**
-     * HTML-Content laden mit Fallback-Strategien (SCHNELLE VERSION)
+     * HTML-Content laden
      */
-    private function loadHtmlContent($url, &$debug) {
+    private function loadHtmlContent($url) {
         $strategies = [
             'browser' => 'Standard Browser Headers',
             'googlebot' => 'Googlebot User-Agent'
         ];
         
         foreach ($strategies as $strategy => $description) {
-            $debug[] = "Versuche Strategie: $description";
-            
             $context = $this->createContextForStrategy($strategy);
             $content = @file_get_contents($url, false, $context);
             
             if ($content !== false && strlen($content) > 100) {
-                $debug[] = "✅ Strategie '$description' erfolgreich";
-                $debug[] = "Content-Länge: " . number_format(strlen($content)) . " Zeichen";
-                
-                if (strlen($content) > 100) {
-                    return ['success' => true, 'content' => $content, 'strategy' => $strategy];
-                }
-            } else {
-                $debug[] = "❌ Strategie '$description' fehlgeschlagen";
+                return ['success' => true, 'content' => $content, 'strategy' => $strategy];
             }
         }
         
@@ -195,7 +154,7 @@ class RobustBacklinkChecker {
     }
     
     /**
-     * Stream-Context für verschiedene Strategien erstellen (SCHNELLE VERSION)
+     * Stream-Context für verschiedene Strategien erstellen
      */
     private function createContextForStrategy($strategy) {
         $baseOptions = [
@@ -228,13 +187,13 @@ class RobustBacklinkChecker {
     }
     
     /**
-     * Link-Analyse mit erweiterten Matching-Algorithmen
+     * Link-Analyse
      */
-    private function analyzeLinks($htmlContent, $targetUrl, $anchorText, &$debug) {
+    private function analyzeLinks($htmlContent, $targetUrl, $anchorText) {
         // URL-Normalisierung
         $normalizeUrl = function($url) {
             $url = trim($url);
-            $url = strtok($url, '#'); // Fragment entfernen
+            $url = strtok($url, '#');
             $url = rtrim($url, '/');
             return strtolower($url);
         };
@@ -242,30 +201,21 @@ class RobustBacklinkChecker {
         $normalizedTargetUrl = $normalizeUrl($targetUrl);
         $normalizedAnchorText = trim(strtolower($anchorText));
         
-        $debug[] = "Normalisierte Ziel-URL: $normalizedTargetUrl";
-        $debug[] = "Normalisierter Ankertext: '$normalizedAnchorText'";
-        
         // URL-Varianten generieren
         $urlVariants = $this->generateUrlVariants($targetUrl, $normalizedTargetUrl);
         $anchorVariants = $this->generateAnchorVariants($anchorText, $normalizedAnchorText);
         
-        $debug[] = "URL-Varianten (" . count($urlVariants) . "): " . implode(', ', array_slice($urlVariants, 0, 3)) . '...';
-        $debug[] = "Ankertext-Varianten (" . count($anchorVariants) . "): " . implode(', ', array_slice($anchorVariants, 0, 3)) . '...';
-        
         // Links extrahieren
-        $foundLinks = $this->extractLinks($htmlContent, $debug);
-        $debug[] = "Gefundene Links: " . count($foundLinks);
+        $foundLinks = $this->extractLinks($htmlContent);
         
         // Link-Matching
-        $matchResults = $this->matchLinks($foundLinks, $urlVariants, $anchorVariants, $debug);
+        $matchResults = $this->matchLinks($foundLinks, $urlVariants, $anchorVariants);
         
         return [
             'containsTargetLink' => $matchResults['containsTargetLink'],
             'foundLinks' => array_slice($foundLinks, 0, 20),
             'normalizedTargetUrl' => $normalizedTargetUrl,
             'normalizedAnchorText' => $normalizedAnchorText,
-            'urlVariants' => $urlVariants,
-            'anchorVariants' => $anchorVariants,
             'urlMatches' => $matchResults['urlMatches'],
             'textMatches' => $matchResults['textMatches'],
             'perfectMatches' => $matchResults['perfectMatches']
@@ -275,17 +225,16 @@ class RobustBacklinkChecker {
     /**
      * Links aus HTML extrahieren
      */
-    private function extractLinks($htmlContent, &$debug) {
+    private function extractLinks($htmlContent) {
         $patterns = [
             '/<a\s[^>]*href\s*=\s*["\']([^"\']*)["\'][^>]*>(.*?)<\/a>/is',
             '/<a\s[^>]*href\s*=\s*([^\s>]+)[^>]*>(.*?)<\/a>/is'
         ];
         
         $allMatches = [];
-        foreach ($patterns as $i => $pattern) {
+        foreach ($patterns as $pattern) {
             $matches = [];
             if (preg_match_all($pattern, $htmlContent, $matches, PREG_SET_ORDER)) {
-                $debug[] = "Pattern " . ($i + 1) . ": " . count($matches) . " Matches";
                 $allMatches = array_merge($allMatches, $matches);
             }
         }
@@ -314,7 +263,7 @@ class RobustBacklinkChecker {
     }
     
     /**
-     * URL-Varianten generieren (SCHNELLE VERSION)
+     * URL-Varianten generieren
      */
     private function generateUrlVariants($originalUrl, $normalizedUrl) {
         $variants = [$normalizedUrl];
@@ -326,7 +275,7 @@ class RobustBacklinkChecker {
         $variants[] = str_replace('https://', 'http://', $normalizedUrl);
         $variants[] = str_replace('http://', 'https://', $normalizedUrl);
         
-        // WWW Varianten (nur die häufigsten)
+        // WWW Varianten
         $variants[] = str_replace('://', '://www.', $normalizedUrl);
         $variants[] = str_replace('://www.', '://', $normalizedUrl);
         
@@ -334,7 +283,7 @@ class RobustBacklinkChecker {
     }
     
     /**
-     * Ankertext-Varianten generieren (SCHNELLE VERSION)
+     * Ankertext-Varianten generieren
      */
     private function generateAnchorVariants($originalAnchor, $normalizedAnchor) {
         $variants = [$normalizedAnchor];
@@ -356,7 +305,7 @@ class RobustBacklinkChecker {
     /**
      * Link-Matching durchführen
      */
-    private function matchLinks($foundLinks, $urlVariants, $anchorVariants, &$debug) {
+    private function matchLinks($foundLinks, $urlVariants, $anchorVariants) {
         $containsTargetLink = false;
         $urlMatches = 0;
         $textMatches = 0;
@@ -397,8 +346,6 @@ class RobustBacklinkChecker {
                 $containsTargetLink = true;
             }
         }
-        
-        $debug[] = "Matching-Ergebnisse: URL-Matches=$urlMatches, Text-Matches=$textMatches, Perfekte-Matches=$perfectMatches";
         
         return [
             'containsTargetLink' => $containsTargetLink,
@@ -541,17 +488,57 @@ class RobustBacklinkChecker {
     /**
      * Fehler-Response erstellen
      */
-    private function createErrorResponse($error, $debug, $httpStatus) {
+    private function createErrorResponse($error, $httpStatus) {
         return [
             'isValid' => false,
             'containsTargetLink' => false,
             'httpStatus' => $httpStatus,
             'error' => $error,
-            'debug' => $debug,
             'foundLinks' => [],
             'responseTime' => 0,
             'responseSize' => 0
         ];
+    }
+}
+
+/**
+ * Kostenfunktionen
+ */
+function validateCostAmount($amount) {
+    if (empty($amount)) return null;
+    $amount = str_replace(',', '.', trim($amount));
+    return is_numeric($amount) && $amount >= 0 ? (float)$amount : false;
+}
+
+function formatCostDisplay($amount, $type, $currency = 'EUR') {
+    if (empty($amount) || $amount <= 0) return '-';
+    
+    $formatted = number_format($amount, 2, ',', '.') . ' ' . $currency;
+    
+    switch ($type) {
+        case 'monthly':
+            return $formatted . '/Monat';
+        case 'yearly':
+            return $formatted . '/Jahr';
+        case 'onetime':
+            return $formatted . ' (einmalig)';
+        default:
+            return $formatted;
+    }
+}
+
+function calculateMonthlyCost($amount, $type) {
+    if (empty($amount) || $amount <= 0) return 0;
+    
+    switch ($type) {
+        case 'monthly':
+            return $amount;
+        case 'yearly':
+            return $amount / 12;
+        case 'onetime':
+            return 0; // Einmalige Kosten nicht in monatliche Berechnung
+        default:
+            return 0;
     }
 }
 
@@ -574,18 +561,21 @@ try {
     // Backlink-Checker initialisieren
     $backlinkChecker = new RobustBacklinkChecker();
 
-    // =============================================================================
     // POST-Verarbeitung
-    // =============================================================================
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'create') {
             $customerId = $_POST['customer_id'] ?? '';
-            $customerWebsiteId = $_POST['customer_website_id'] ?? ''; // NEU: Spezifische Website
+            $customerWebsiteId = $_POST['customer_website_id'] ?? '';
             $blogId = $_POST['blog_id'] ?? '';
             $backlinkUrl = trim($_POST['backlink_url'] ?? '');
             $anchorText = trim($_POST['anchor_text'] ?? '');
             $targetUrl = trim($_POST['target_url'] ?? '');
             $description = trim($_POST['description'] ?? '');
+            
+            // Kostenfelder
+            $costAmount = $_POST['cost_amount'] ?? '';
+            $costType = $_POST['cost_type'] ?? 'monthly';
+            $costCurrency = $_POST['cost_currency'] ?? 'EUR';
             
             $errors = [];
             
@@ -603,6 +593,15 @@ try {
                 $errors[] = 'Ungültige Ziel-URL.';
             }
             
+            // Kosten-Validierung
+            $validatedCostAmount = null;
+            if (!empty($costAmount)) {
+                $validatedCostAmount = validateCostAmount($costAmount);
+                if ($validatedCostAmount === false) {
+                    $errors[] = 'Ungültiger Kostenbetrag. Bitte geben Sie eine gültige Zahl ein.';
+                }
+            }
+            
             if (empty($errors)) {
                 $links = loadData('links.json');
                 $newId = generateId();
@@ -611,12 +610,15 @@ try {
                     'id' => $newId,
                     'user_id' => $userId,
                     'customer_id' => $customerId,
-                    'customer_website_id' => $customerWebsiteId, // NEU: Website-ID speichern
+                    'customer_website_id' => $customerWebsiteId,
                     'blog_id' => $blogId,
                     'backlink_url' => $backlinkUrl,
                     'anchor_text' => $anchorText,
                     'target_url' => $targetUrl,
                     'description' => $description,
+                    'cost_amount' => $validatedCostAmount,
+                    'cost_type' => $costType,
+                    'cost_currency' => $costCurrency,
                     'status' => 'ausstehend',
                     'created_at' => date('Y-m-d H:i:s'),
                     'last_checked' => null,
@@ -630,14 +632,18 @@ try {
                 }
             }
         } elseif ($action === 'update' && $linkId) {
-            // Link aktualisieren
             $customerId = $_POST['customer_id'] ?? '';
-            $customerWebsiteId = $_POST['customer_website_id'] ?? ''; // NEU: Spezifische Website
+            $customerWebsiteId = $_POST['customer_website_id'] ?? '';
             $blogId = $_POST['blog_id'] ?? '';
             $backlinkUrl = trim($_POST['backlink_url'] ?? '');
             $anchorText = trim($_POST['anchor_text'] ?? '');
             $targetUrl = trim($_POST['target_url'] ?? '');
             $description = trim($_POST['description'] ?? '');
+            
+            // Kostenfelder
+            $costAmount = $_POST['cost_amount'] ?? '';
+            $costType = $_POST['cost_type'] ?? 'monthly';
+            $costCurrency = $_POST['cost_currency'] ?? 'EUR';
             
             $errors = [];
             
@@ -655,17 +661,28 @@ try {
                 $errors[] = 'Ungültige Ziel-URL.';
             }
             
+            // Kosten-Validierung
+            $validatedCostAmount = null;
+            if (!empty($costAmount)) {
+                $validatedCostAmount = validateCostAmount($costAmount);
+                if ($validatedCostAmount === false) {
+                    $errors[] = 'Ungültiger Kostenbetrag. Bitte geben Sie eine gültige Zahl ein.';
+                }
+            }
+            
             if (empty($errors)) {
                 $links = loadData('links.json');
                 if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
-                    // Link aktualisieren
                     $links[$linkId]['customer_id'] = $customerId;
-                    $links[$linkId]['customer_website_id'] = $customerWebsiteId; // NEU: Website-ID aktualisieren
+                    $links[$linkId]['customer_website_id'] = $customerWebsiteId;
                     $links[$linkId]['blog_id'] = $blogId;
                     $links[$linkId]['backlink_url'] = $backlinkUrl;
                     $links[$linkId]['anchor_text'] = $anchorText;
                     $links[$linkId]['target_url'] = $targetUrl;
                     $links[$linkId]['description'] = $description;
+                    $links[$linkId]['cost_amount'] = $validatedCostAmount;
+                    $links[$linkId]['cost_type'] = $costType;
+                    $links[$linkId]['cost_currency'] = $costCurrency;
                     $links[$linkId]['updated_at'] = date('Y-m-d H:i:s');
                     
                     if (saveData('links.json', $links)) {
@@ -678,7 +695,6 @@ try {
                 }
             }
         } elseif ($action === 'delete' && $linkId) {
-            // Link löschen
             $links = loadData('links.json');
             if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
                 $link = $links[$linkId];
@@ -697,7 +713,6 @@ try {
                 redirectWithMessage('?page=links', 'Link nicht gefunden oder keine Berechtigung.');
             }
         } elseif ($action === 'check' && $linkId) {
-            // Einzelnen Link prüfen
             $links = loadData('links.json');
             if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
                 $link = $links[$linkId];
@@ -730,7 +745,6 @@ try {
                     'response_size' => $result['responseSize'] ?? 0
                 ];
                 
-                // Link-Daten aktualisieren
                 $links[$linkId]['status'] = $newStatus;
                 $links[$linkId]['last_checked'] = date('Y-m-d H:i:s');
                 $links[$linkId]['check_result'] = $result;
@@ -753,9 +767,7 @@ try {
         }
     }
 
-    // =============================================================================
-    // DEBUG-ACTION: Vollständige Debug-Analyse
-    // =============================================================================
+    // Debug-Seite für Link-Analyse
     if ($action === 'debug' && $linkId) {
         $links = loadData('links.json');
         if (isset($links[$linkId]) && ($isAdmin || $links[$linkId]['user_id'] === $userId)) {
@@ -767,7 +779,7 @@ try {
                 $link['anchor_text']
             );
             
-            // Debug-Seite ausgeben
+            // Vereinfachte Debug-Seite
             ?>
             <!DOCTYPE html>
             <html lang="de">
@@ -780,19 +792,12 @@ try {
                     body { background: #1a1d2e; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; line-height: 1.6; }
                     .debug-container { max-width: 1200px; margin: 0 auto; }
                     .debug-section { background: #343852; padding: 24px; margin: 20px 0; border-radius: 12px; border: 1px solid #3a3d52; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-                    .debug-step { margin: 20px 0; padding: 16px; background: #2a2d42; border-radius: 8px; border-left: 4px solid #4dabf7; }
                     .success { color: #10b981; }
                     .error { color: #ef4444; }
-                    .warning { color: #f59e0b; }
                     .info { color: #4dabf7; }
                     .metric { display: inline-block; margin: 8px 16px 8px 0; padding: 8px 12px; background: #3a3d52; border-radius: 6px; font-size: 14px; }
-                    .link-item { margin: 8px 0; padding: 12px; background: #2a2d42; border-radius: 6px; border-left: 4px solid #6b7280; font-size: 13px; }
-                    .link-item.perfect { border-left-color: #10b981; }
-                    .link-item.partial { border-left-color: #f59e0b; }
-                    pre { background: #1a1d2e; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; font-family: 'Monaco', 'Menlo', monospace; }
                     .btn { display: inline-block; padding: 12px 24px; background: #4dabf7; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
                     .btn:hover { background: #3b9ae1; transform: translateY(-1px); }
-                    .header { text-align: center; margin-bottom: 30px; }
                     .status-badge { padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 12px; }
                     .status-success { background: #10b981; color: white; }
                     .status-warning { background: #f59e0b; color: white; }
@@ -801,11 +806,9 @@ try {
             </head>
             <body>
                 <div class="debug-container">
-                    <div class="header">
-                        <h1 style="color: #4dabf7; margin-bottom: 8px;">🔍 Erweiterte Link-Debug-Analyse</h1>
-                        <p style="color: #8b8fa3; margin: 0;">
-                            Vollständige Analyse mit modernen Anti-Bot-Detection Techniken
-                        </p>
+                    <div class="header" style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #4dabf7; margin-bottom: 8px;">🔍 Link-Debug-Analyse</h1>
+                        <p style="color: #8b8fa3; margin: 0;">Erweiterte Analyse der Backlink-Validierung</p>
                     </div>
                     
                     <div class="debug-section">
@@ -851,10 +854,6 @@ try {
                             <div class="metric">
                                 <strong>Response-Zeit:</strong> 
                                 <span class="info"><?= $result['responseTime'] ?? 0 ?>ms</span>
-                            </div>
-                            <div class="metric">
-                                <strong>Response-Größe:</strong> 
-                                <span class="info"><?= number_format($result['responseSize'] ?? 0) ?> Zeichen</span>
                             </div>
                         </div>
                         
@@ -907,46 +906,6 @@ try {
                     </div>
                     <?php endif; ?>
                     
-                    <?php if (!empty($result['foundLinks'])): ?>
-                    <div class="debug-section">
-                        <h2 style="color: #e2e8f0; margin-bottom: 16px;">🔗 Gefundene Links (Top 10)</h2>
-                        <div style="max-height: 400px; overflow-y: auto;">
-                            <?php foreach (array_slice($result['foundLinks'], 0, 10) as $i => $foundLink): ?>
-                                <div class="link-item <?= $foundLink['perfectMatch'] ? 'perfect' : ($foundLink['hrefMatch'] || $foundLink['textMatch'] ? 'partial' : '') ?>">
-                                    <div style="font-weight: 600; margin-bottom: 4px;">
-                                        Link #<?= $i + 1 ?>
-                                        <?php if ($foundLink['perfectMatch']): ?>
-                                            <span class="success">🎯 PERFEKTER MATCH!</span>
-                                        <?php elseif ($foundLink['hrefMatch']): ?>
-                                            <span class="info">🔗 URL-Match</span>
-                                        <?php elseif ($foundLink['textMatch']): ?>
-                                            <span class="info">📝 Text-Match</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div style="margin-bottom: 2px;">
-                                        <strong>URL:</strong> <?= htmlspecialchars(strlen($foundLink['href']) > 80 ? substr($foundLink['href'], 0, 80) . '...' : $foundLink['href']) ?>
-                                        <?= $foundLink['hrefMatch'] ? '<span class="success">✅</span>' : '<span class="error">❌</span>' ?>
-                                    </div>
-                                    <div>
-                                        <strong>Text:</strong> "<?= htmlspecialchars(strlen($foundLink['text']) > 80 ? substr($foundLink['text'], 0, 80) . '...' : $foundLink['text']) ?>"
-                                        <?= $foundLink['textMatch'] ? '<span class="success">✅</span>' : '<span class="error">❌</span>' ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <?php if (!empty($result['debug'])): ?>
-                    <div class="debug-section">
-                        <h2 style="color: #e2e8f0; margin-bottom: 16px;">🐛 Debug-Log</h2>
-                        <details>
-                            <summary style="cursor: pointer; color: #4dabf7; font-weight: 600;">Debug-Informationen anzeigen</summary>
-                            <pre style="margin-top: 16px;"><?= htmlspecialchars(implode("\n", $result['debug'])) ?></pre>
-                        </details>
-                    </div>
-                    <?php endif; ?>
-                    
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="?page=links&action=view&id=<?= $linkId ?>" class="btn">
                             ← Zurück zum Link
@@ -963,14 +922,11 @@ try {
         }
     }
 
-    // =============================================================================
-    // DATEN LADEN UND VALIDIEREN
-    // =============================================================================
+    // Daten laden
     $links = loadData('links.json');
     $customers = loadData('customers.json');
     $blogs = loadData('blogs.json');
 
-    // Sicherstellen dass Arrays existieren
     if (!is_array($links)) $links = [];
     if (!is_array($customers)) $customers = [];
     if (!is_array($blogs)) $blogs = [];
@@ -991,16 +947,20 @@ try {
 
     // Statistiken berechnen
     $statusStats = array();
+    $totalMonthlyCosts = 0;
     if (is_array($userLinks)) {
         foreach ($userLinks as $link) {
             $status = $link['status'] ?? 'ausstehend';
             $statusStats[$status] = ($statusStats[$status] ?? 0) + 1;
+            
+            // Monatliche Kosten summieren
+            if (!empty($link['cost_amount']) && !empty($link['cost_type'])) {
+                $totalMonthlyCosts += calculateMonthlyCost($link['cost_amount'], $link['cost_type']);
+            }
         }
     }
 
-    // =============================================================================
-    // HILFSFUNKTION: Website-Info aus Link laden
-    // =============================================================================
+    // Hilfsfunktion: Website-Info aus Link laden
     function getCustomerWebsiteInfo($link, $customers) {
         $customerId = $link['customer_id'] ?? '';
         $websiteId = $link['customer_website_id'] ?? '';
@@ -1029,10 +989,7 @@ try {
         return null;
     }
 
-    // =============================================================================
-    // VIEW LOGIC STARTS HERE
-    // =============================================================================
-
+    // View Logic starts here
     if ($action === 'index'): ?>
         <div class="page-header">
             <div>
@@ -1044,6 +1001,9 @@ try {
                 </h1>
                 <p class="page-subtitle">
                     Verwalten Sie Ihre platzierten Links (<?= count($userLinks) ?> Links)
+                    <?php if ($totalMonthlyCosts > 0): ?>
+                        • Monatliche Kosten: <strong><?= formatCostDisplay($totalMonthlyCosts, 'monthly') ?></strong>
+                    <?php endif; ?>
                 </p>
             </div>
             <div class="action-buttons">
@@ -1090,6 +1050,21 @@ try {
                             <div style="font-size: 12px; color: #8b8fa3;">Defekt</div>
                         </div>
                     </div>
+                    
+                    <!-- Kosten-Übersicht -->
+                    <?php if ($totalMonthlyCosts > 0): ?>
+                        <div style="margin-top: 20px; padding: 16px; background: linear-gradient(135deg, #343852, #2a2d42); border-radius: 8px; border: 1px solid #4dabf7;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 12px; color: #8b8fa3; margin-bottom: 4px;">GESCHÄTZTE MONATLICHE KOSTEN</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #4dabf7;">
+                                    <?= formatCostDisplay($totalMonthlyCosts, 'monthly') ?>
+                                </div>
+                                <div style="font-size: 11px; color: #8b8fa3; margin-top: 4px;">
+                                    Basierend auf <?= count(array_filter($userLinks, function($link) { return !empty($link['cost_amount']); })) ?> Links mit Kostendaten
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -1160,6 +1135,7 @@ try {
                                     <th>Kunde / Website</th>
                                     <th>Blog</th>
                                     <th>Status</th>
+                                    <th>Kosten</th>
                                     <th>Letzte Prüfung</th>
                                     <th>Erstellt</th>
                                     <th style="width: 180px;">Aktionen</th>
@@ -1172,6 +1148,32 @@ try {
                                     $websiteInfo = getCustomerWebsiteInfo($link, $customers);
                                 ?>
                                     <tr>
+                                        <td>
+                                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 4px;">
+                                                <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
+                                                    <?= htmlspecialchars($link['anchor_text'] ?? 'Unbekannt') ?>
+                                                </a>
+                                            </div>
+                                            <div style="font-size: 11px; color: #8b8fa3;">
+                                                <?= htmlspecialchars(substr($link['backlink_url'] ?? '', 0, 50)) ?>...
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php if ($customer): ?>
+                                                <div style="margin-bottom: 2px;">
+                                                    <a href="?page=customers&action=view&id=<?= $link['customer_id'] ?>" style="color: #4dabf7; text-decoration: none; font-weight: 600;">
+                                                        <?= htmlspecialchars($customer['name']) ?>
+                                                    </a>
+                                                </div>
+                                                <?php if ($websiteInfo): ?>
+                                                    <div style="font-size: 11px; color: #8b8fa3;">
+                                                        🌐 <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <span style="color: #8b8fa3;">-</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td>
                                             <?php if ($blog): ?>
                                                 <a href="?page=blogs&action=view&id=<?= $link['blog_id'] ?>" style="color: #4dabf7; text-decoration: none;">
@@ -1198,6 +1200,15 @@ try {
                                             }
                                             ?>
                                             <span class="badge <?= $badgeClass ?>"><?= ucfirst($status) ?></span>
+                                        </td>
+                                        <td style="color: #8b8fa3; font-size: 12px;">
+                                            <?php if (!empty($link['cost_amount']) && !empty($link['cost_type'])): ?>
+                                                <div style="color: #4dabf7; font-weight: 600;">
+                                                    <?= formatCostDisplay($link['cost_amount'], $link['cost_type'], $link['cost_currency'] ?? 'EUR') ?>
+                                                </div>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
                                         </td>
                                         <td style="color: #8b8fa3; font-size: 12px;">
                                             <?php if (!empty($link['last_checked'])): ?>
@@ -1272,6 +1283,11 @@ try {
                     <?php if ($websiteInfo): ?>
                         <br><small style="color: #8b8fa3;">
                             🌐 Für Website: <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
+                        </small>
+                    <?php endif; ?>
+                    <?php if (!empty($link['cost_amount']) && !empty($link['cost_type'])): ?>
+                        <br><small style="color: #4dabf7; font-weight: 600;">
+                            💰 Kosten: <?= formatCostDisplay($link['cost_amount'], $link['cost_type'], $link['cost_currency'] ?? 'EUR') ?>
                         </small>
                     <?php endif; ?>
                 </p>
@@ -1371,6 +1387,22 @@ try {
                                 <span class="badge <?= $badgeClass ?>"><?= ucfirst($status) ?></span>
                             </div>
                         </div>
+                        
+                        <!-- Kosteninformationen -->
+                        <?php if (!empty($link['cost_amount']) && !empty($link['cost_type'])): ?>
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">KOSTEN</div>
+                            <div style="color: #4dabf7; font-weight: 600; font-size: 16px;">
+                                💰 <?= formatCostDisplay($link['cost_amount'], $link['cost_type'], $link['cost_currency'] ?? 'EUR') ?>
+                            </div>
+                            <?php if ($link['cost_type'] !== 'monthly'): ?>
+                                <div style="font-size: 12px; color: #8b8fa3; margin-top: 4px;">
+                                    Monatlich: <?= formatCostDisplay(calculateMonthlyCost($link['cost_amount'], $link['cost_type']), 'monthly', $link['cost_currency'] ?? 'EUR') ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                        
                         <div style="margin-bottom: 16px;">
                             <div style="font-weight: 600; color: #8b8fa3; font-size: 12px; margin-bottom: 4px;">LETZTE PRÜFUNG</div>
                             <div style="color: #e2e8f0;">
@@ -1538,7 +1570,7 @@ try {
                         </div>
                     </div>
 
-                    <!-- NEU: Website-Auswahl für Kunde -->
+                    <!-- Website-Auswahl für Kunde -->
                     <div id="websiteSelectionContainer" style="margin-bottom: 20px; display: none;">
                         <label class="form-label">Kunden-Website (Optional)</label>
                         <select name="customer_website_id" class="form-control" id="customerWebsiteSelect">
@@ -1569,6 +1601,44 @@ try {
                                    value="<?= htmlspecialchars($link['backlink_url']) ?>" 
                                    placeholder="https://blog.example.com/artikel" required>
                         </div>
+                    </div>
+
+                    <!-- Kosten-Sektion -->
+                    <div class="cost-section" style="background: #2a2d42; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                        <h4 style="color: #f59e0b; margin: 0 0 16px 0; font-size: 16px;">
+                            <i class="fas fa-euro-sign" style="margin-right: 8px;"></i>
+                            Kostenverwaltung
+                        </h4>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: end;">
+                            <div>
+                                <label class="form-label">Kostenbetrag</label>
+                                <input type="text" name="cost_amount" class="form-control" 
+                                       value="<?= !empty($link['cost_amount']) ? number_format($link['cost_amount'], 2, ',', '') : '' ?>"
+                                       placeholder="0,00" pattern="[0-9]+([.,][0-9]{1,2})?"
+                                       title="Bitte geben Sie einen gültigen Betrag ein (z.B. 12,50)">
+                            </div>
+                            <div style="min-width: 120px;">
+                                <label class="form-label">Kostentyp</label>
+                                <select name="cost_type" class="form-control">
+                                    <option value="monthly" <?= ($link['cost_type'] ?? 'monthly') === 'monthly' ? 'selected' : '' ?>>Monatlich</option>
+                                    <option value="yearly" <?= ($link['cost_type'] ?? '') === 'yearly' ? 'selected' : '' ?>>Jährlich</option>
+                                    <option value="onetime" <?= ($link['cost_type'] ?? '') === 'onetime' ? 'selected' : '' ?>>Einmalig</option>
+                                </select>
+                            </div>
+                            <div style="min-width: 80px;">
+                                <label class="form-label">Währung</label>
+                                <select name="cost_currency" class="form-control">
+                                    <option value="EUR" <?= ($link['cost_currency'] ?? 'EUR') === 'EUR' ? 'selected' : '' ?>>EUR</option>
+                                    <option value="USD" <?= ($link['cost_currency'] ?? '') === 'USD' ? 'selected' : '' ?>>USD</option>
+                                    <option value="GBP" <?= ($link['cost_currency'] ?? '') === 'GBP' ? 'selected' : '' ?>>GBP</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <small style="color: #8b8fa3; font-size: 12px; display: block; margin-top: 8px;">
+                            💡 Tipp: Lassen Sie das Feld leer, wenn für diesen Link keine Kosten anfallen
+                        </small>
                     </div>
 
                     <div style="margin-bottom: 20px;">
@@ -1695,6 +1765,44 @@ try {
                                    value="<?= htmlspecialchars($_POST['backlink_url'] ?? '') ?>"
                                    placeholder="https://blog.example.com/artikel" required>
                         </div>
+                    </div>
+
+                    <!-- Kosten-Sektion -->
+                    <div class="cost-section" style="background: #2a2d42; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                        <h4 style="color: #f59e0b; margin: 0 0 16px 0; font-size: 16px;">
+                            <i class="fas fa-euro-sign" style="margin-right: 8px;"></i>
+                            Kostenverwaltung
+                        </h4>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: end;">
+                            <div>
+                                <label class="form-label">Kostenbetrag</label>
+                                <input type="text" name="cost_amount" class="form-control" 
+                                       value="<?= htmlspecialchars($_POST['cost_amount'] ?? '') ?>"
+                                       placeholder="0,00" pattern="[0-9]+([.,][0-9]{1,2})?"
+                                       title="Bitte geben Sie einen gültigen Betrag ein (z.B. 12,50)">
+                            </div>
+                            <div style="min-width: 120px;">
+                                <label class="form-label">Kostentyp</label>
+                                <select name="cost_type" class="form-control">
+                                    <option value="monthly" <?= ($_POST['cost_type'] ?? 'monthly') === 'monthly' ? 'selected' : '' ?>>Monatlich</option>
+                                    <option value="yearly" <?= ($_POST['cost_type'] ?? '') === 'yearly' ? 'selected' : '' ?>>Jährlich</option>
+                                    <option value="onetime" <?= ($_POST['cost_type'] ?? '') === 'onetime' ? 'selected' : '' ?>>Einmalig</option>
+                                </select>
+                            </div>
+                            <div style="min-width: 80px;">
+                                <label class="form-label">Währung</label>
+                                <select name="cost_currency" class="form-control">
+                                    <option value="EUR" <?= ($_POST['cost_currency'] ?? 'EUR') === 'EUR' ? 'selected' : '' ?>>EUR</option>
+                                    <option value="USD" <?= ($_POST['cost_currency'] ?? '') === 'USD' ? 'selected' : '' ?>>USD</option>
+                                    <option value="GBP" <?= ($_POST['cost_currency'] ?? '') === 'GBP' ? 'selected' : '' ?>>GBP</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <small style="color: #8b8fa3; font-size: 12px; display: block; margin-top: 8px;">
+                            💡 Tipp: Lassen Sie das Feld leer, wenn für diesen Link keine Kosten anfallen
+                        </small>
                     </div>
 
                     <div style="margin-bottom: 20px;">
@@ -1842,38 +1950,6 @@ try {
         border-color: #dc2626;
     }
 
-    /* Progress Bar Styles */
-    .progress-container {
-        display: none;
-        width: 100%;
-        background-color: #343852;
-        border-radius: 4px;
-        overflow: hidden;
-        margin: 8px 0;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    .progress-bar {
-        height: 24px;
-        background: linear-gradient(90deg, #4dabf7, #06b6d4);
-        width: 0%;
-        transition: width 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 11px;
-        font-weight: 600;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
-
-    .progress-text {
-        font-size: 12px;
-        color: #8b8fa3;
-        text-align: center;
-        margin-top: 4px;
-    }
-
     .btn.checking {
         position: relative;
         color: transparent;
@@ -1939,6 +2015,32 @@ try {
         box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.3) !important;
     }
 
+    /* Kosten-Sektion */
+    .cost-section {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .cost-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+    }
+
+    .cost-section .form-control {
+        background-color: #343852 !important;
+        border-color: #f59e0b !important;
+    }
+
+    .cost-section .form-control:focus {
+        border-color: #d97706 !important;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3) !important;
+    }
+
     @keyframes slideDown {
         from {
             opacity: 0;
@@ -1966,45 +2068,36 @@ try {
         .content-grid {
             grid-template-columns: 1fr;
         }
+        
+        .cost-section > div {
+            grid-template-columns: 1fr !important;
+        }
     }
     </style>
 
     <script>
-    // Globale Funktion für Website-Auswahl
+    // Website-Auswahl Funktion
     async function loadCustomerWebsites(preselectedWebsiteId = null) {
-        console.log('🔄 loadCustomerWebsites called with:', preselectedWebsiteId);
-        
         const customerSelect = document.getElementById('customerSelect');
         const websiteContainer = document.getElementById('websiteSelectionContainer');
         const websiteSelect = document.getElementById('customerWebsiteSelect');
         
         if (!customerSelect || !websiteContainer || !websiteSelect) {
-            console.error('❌ Elements not found:', {
-                customerSelect: !!customerSelect,
-                websiteContainer: !!websiteContainer,
-                websiteSelect: !!websiteSelect
-            });
             return;
         }
         
         const customerId = customerSelect.value;
-        console.log('👤 Customer ID:', customerId);
         
         if (!customerId) {
-            console.log('ℹ️ No customer selected, hiding website container');
             websiteContainer.style.display = 'none';
             return;
         }
         
         try {
-            // Loading state
             websiteSelect.innerHTML = '<option value="">🔄 Lade Websites...</option>';
             websiteSelect.disabled = true;
             
-            // AJAX-Endpoint URL - separate AJAX-Datei
             const url = `ajax/get_customer_websites.php?customer_id=${encodeURIComponent(customerId)}&t=${Date.now()}`;
-            
-            console.log('🌐 Fetching from:', url);
             
             const response = await fetch(url, {
                 method: 'GET',
@@ -2016,48 +2109,19 @@ try {
                 credentials: 'same-origin'
             });
             
-            console.log('📡 Response status:', response.status);
-            console.log('📡 Response content-type:', response.headers.get('content-type'));
-            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            const responseText = await response.text();
-            console.log('📄 Raw response (first 300 chars):', responseText.substring(0, 300));
+            const data = await response.json();
             
-            // Prüfen ob Response wirklich JSON ist
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                console.error('❌ Response is not JSON, content-type:', contentType);
-                console.error('❌ Full response:', responseText);
-                throw new Error(`Expected JSON response, got: ${contentType || 'unknown'}`);
-            }
-            
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('❌ JSON Parse Error:', parseError);
-                console.error('❌ Full response text:', responseText);
-                throw new Error('Server returned invalid JSON');
-            }
-            
-            console.log('✅ Parsed data:', data);
-            console.log('🔍 Debug info:', data.debug);
-            
-            // Prüfen ob Request erfolgreich war
             if (!data.success) {
                 throw new Error(data.error || 'Unknown server error');
             }
             
-            // Clear existing options
             websiteSelect.innerHTML = '<option value="">Keine spezifische Website</option>';
             
             if (data.websites && data.websites.length > 0) {
-                console.log(`🌐 Found ${data.websites.length} websites:`, data.websites);
-                
-                // Add website options
                 data.websites.forEach((website, index) => {
                     const option = document.createElement('option');
                     option.value = website.id;
@@ -2066,204 +2130,82 @@ try {
                         option.textContent += ` - ${website.description}`;
                     }
                     
-                    // Preselect website if specified
                     if (preselectedWebsiteId !== null && website.id == preselectedWebsiteId) {
                         option.selected = true;
-                        console.log(`✅ Pre-selected website: ${website.title}`);
                     }
                     
                     websiteSelect.appendChild(option);
                 });
                 
-                // Show container with animation
                 websiteContainer.style.display = 'block';
                 websiteContainer.classList.add('visible');
                 
-                // Update label to show count
                 const label = websiteContainer.querySelector('.form-label');
                 if (label) {
                     label.innerHTML = `<i class="fas fa-globe" style="margin-right: 6px; color: #4dabf7;"></i>Kunden-Website (${data.websites.length} verfügbar)`;
                 }
-                
-                console.log(`✅ Website selection shown with ${data.websites.length} options`);
             } else {
-                console.log('ℹ️ No websites found for customer');
-                console.log('ℹ️ Debug info:', data.debug);
                 websiteContainer.style.display = 'none';
-                
-                // Show info message für Kunden ohne Websites
-                const label = websiteContainer.querySelector('.form-label');
-                if (label) {
-                    label.innerHTML = `<i class="fas fa-info-circle" style="margin-right: 6px; color: #8b8fa3;"></i>Keine Websites für diesen Kunden`;
-                }
             }
             
             websiteSelect.disabled = false;
             
         } catch (error) {
-            console.error('❌ Error loading customer websites:', error);
             websiteSelect.innerHTML = '<option value="">❌ Fehler beim Laden</option>';
             websiteSelect.disabled = false;
-            
-            // Show error message
-            const label = websiteContainer.querySelector('.form-label');
-            if (label) {
-                label.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right: 6px; color: #ef4444;"></i>Fehler beim Laden der Websites`;
-            }
-            
-            // Show error details in container
             websiteContainer.style.display = 'block';
-            const errorDiv = document.createElement('div');
-            errorDiv.style.cssText = 'background: #2d1b1b; border: 1px solid #ef4444; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 12px; color: #fca5a5;';
-            errorDiv.innerHTML = `
-                <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                    <i class="fas fa-exclamation-triangle" style="margin-right: 8px; color: #ef4444;"></i>
-                    <strong>Fehler beim Laden der Websites</strong>
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <strong>Fehlermeldung:</strong> ${error.message}
-                </div>
-                <div style="margin-bottom: 8px; font-size: 11px; color: #d1d5db;">
-                    Prüfen Sie die Browser-Konsole (F12) für weitere Details
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="loadCustomerWebsites()" style="background: #ef4444; border: none; color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                        🔄 Erneut versuchen
-                    </button>
-                    <button onclick="this.parentElement.parentElement.style.display='none'" style="background: #6b7280; border: none; color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                        ✕ Schließen
-                    </button>
-                </div>
-            `;
-            
-            // Remove existing error divs
-            const existingError = websiteContainer.querySelector('.error-message');
-            if (existingError) existingError.remove();
-            
-            errorDiv.className = 'error-message';
-            websiteContainer.appendChild(errorDiv);
         }
     }
 
-    // Progress Bar für Link-Prüfung
+    // Event Listeners
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded, initializing...');
-        
-        // Handler für kleine Buttons in der Tabelle
+        // Handler für Link-Prüfung Buttons
         document.querySelectorAll('.link-check-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
-                const linkId = this.dataset.linkId;
                 const form = this.closest('form');
                 startLinkCheck(form, this, 'small');
             });
         });
 
-        // Handler für große Buttons in der Detailansicht
         document.querySelectorAll('.link-check-btn-detail').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
-                const linkId = this.dataset.linkId;
                 const form = this.closest('form');
                 startLinkCheck(form, this, 'detail');
             });
         });
 
-        // Website-Auswahl beim Create-Mode laden falls Kunde bereits ausgewählt
+        // Website-Auswahl laden falls Kunde bereits ausgewählt
         const customerSelect = document.getElementById('customerSelect');
         if (customerSelect && customerSelect.value) {
-            console.log('Auto-loading websites for pre-selected customer:', customerSelect.value);
             loadCustomerWebsites();
         }
 
         function startLinkCheck(form, button, type) {
-            // Button deaktivieren und Spinner zeigen
             button.classList.add('checking');
             button.disabled = true;
 
-            let progressContainer = null;
-            let progressBar = null;
-            let progressText = null;
-
-            // Progress Bar nur für Detail-Ansicht
             if (type === 'detail') {
-                // Progress Container erstellen
-                progressContainer = document.createElement('div');
-                progressContainer.className = 'progress-container';
-                progressContainer.innerHTML = `
-                    <div class="progress-bar">0%</div>
-                    <div class="progress-text">Prüfung wird vorbereitet...</div>
-                `;
-                
-                // Progress Container nach dem Button einfügen
-                button.parentNode.insertBefore(progressContainer, button.nextSibling);
-                progressContainer.style.display = 'block';
-                
-                progressBar = progressContainer.querySelector('.progress-bar');
-                progressText = progressContainer.querySelector('.progress-text');
-            }
-
-            // Simuliere Progress Steps
-            const steps = [
-                { progress: 15, text: '📡 Verbinde zu Server...', delay: 300 },
-                { progress: 30, text: '🔍 Prüfe HTTP-Status...', delay: 800 },
-                { progress: 55, text: '📄 Lade HTML-Content...', delay: 1500 },
-                { progress: 75, text: '🔗 Analysiere Links...', delay: 1000 },
-                { progress: 90, text: '✅ Verarbeite Ergebnisse...', delay: 500 },
-                { progress: 100, text: '🎯 Prüfung abgeschlossen!', delay: 300 }
-            ];
-
-            let currentStep = 0;
-            
-            function updateProgress() {
-                if (currentStep < steps.length && progressBar && progressText) {
-                    const step = steps[currentStep];
-                    progressBar.style.width = step.progress + '%';
-                    progressBar.textContent = step.progress + '%';
-                    progressText.textContent = step.text;
-                    currentStep++;
-                    
-                    setTimeout(updateProgress, step.delay);
-                } else if (currentStep >= steps.length) {
-                    // Nach kurzer Pause Form absenden
-                    setTimeout(() => {
-                        form.submit();
-                    }, 500);
-                }
-            }
-
-            // Progress starten
-            if (type === 'detail') {
-                setTimeout(updateProgress, 100);
+                setTimeout(() => {
+                    form.submit();
+                }, 1500);
             } else {
-                // Für kleine Buttons: Nach kurzer Simulation direkt absenden
                 setTimeout(() => {
                     form.submit();
                 }, 1000);
             }
         }
     });
-    
-    // Test function für debugging
-    function testWebsiteLoad() {
-        console.log('Testing website load...');
-        const select = document.getElementById('customerSelect');
-        if (select && select.options.length > 1) {
-            select.selectedIndex = 1; // Select first customer
-            loadCustomerWebsites();
-        }
-    }
     </script>
 
 <?php
 
 } catch (Exception $e) {
-    // Output Buffer leeren bei Fehlern
     if (ob_get_level()) {
         ob_end_clean();
     }
     
-    // Fehlerbehandlung
     echo '<div class="alert alert-danger">';
     echo '<h3>Ein Fehler ist aufgetreten:</h3>';
     echo '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
@@ -2273,35 +2215,8 @@ try {
     echo '<a href="?page=dashboard" class="btn btn-primary">← Zurück zum Dashboard</a>';
 }
 
-// Output Buffer leeren und senden
 if (ob_get_level()) {
     ob_end_flush();
 }
 
 ?>
-                                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 4px;">
-                                                <a href="?page=links&action=view&id=<?= $linkId ?>" style="color: #4dabf7; text-decoration: none;">
-                                                    <?= htmlspecialchars($link['anchor_text'] ?? 'Unbekannt') ?>
-                                                </a>
-                                            </div>
-                                            <div style="font-size: 11px; color: #8b8fa3;">
-                                                <?= htmlspecialchars(substr($link['backlink_url'] ?? '', 0, 50)) ?>...
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <?php if ($customer): ?>
-                                                <div style="margin-bottom: 2px;">
-                                                    <a href="?page=customers&action=view&id=<?= $link['customer_id'] ?>" style="color: #4dabf7; text-decoration: none; font-weight: 600;">
-                                                        <?= htmlspecialchars($customer['name']) ?>
-                                                    </a>
-                                                </div>
-                                                <?php if ($websiteInfo): ?>
-                                                    <div style="font-size: 11px; color: #8b8fa3;">
-                                                        🌐 <?= htmlspecialchars($websiteInfo['title'] ?? $websiteInfo['url']) ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            <?php else: ?>
-                                                <span style="color: #8b8fa3;">-</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
